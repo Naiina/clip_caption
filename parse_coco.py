@@ -10,9 +10,10 @@ import argparse
 
 
 def main(clip_model_type: str):
-    device = torch.device('cuda:0')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #device = torch.device('cuda:0')
     clip_model_name = clip_model_type.replace('/', '_')
-    out_path = f"./data/coco/oscar_split_{clip_model_name}_train.pkl"
+    out_path = f"./data/coco/small_oscar_split_{clip_model_name}_train.pkl"
     clip_model, preprocess = clip.load(clip_model_type, device=device, jit=False)
     with open('./data/coco/annotations/train_caption.json', 'r') as f:
         data = json.load(f)
@@ -20,19 +21,24 @@ def main(clip_model_type: str):
     all_embeddings = []
     all_captions = []
     for i in tqdm(range(len(data))):
+    #for i in tqdm(range(1000)):
         d = data[i]
         img_id = d["image_id"]
         filename = f"./data/coco/train2014/COCO_train2014_{int(img_id):012d}.jpg"
         if not os.path.isfile(filename):
             filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
         image = io.imread(filename)
-        image = preprocess(Image.fromarray(image)).unsqueeze(0).to(device)
+        image = preprocess(Image.fromarray(image)).unsqueeze(0).to(device) # tensors size [1, 3, 224, 224]
+        #print(image.size())
+        
         with torch.no_grad():
             prefix = clip_model.encode_image(image).cpu()
         d["clip_embedding"] = i
         all_embeddings.append(prefix)
         all_captions.append(d)
+        
         if (i + 1) % 10000 == 0:
+            print(f"{i}")
             with open(out_path, 'wb') as f:
                 pickle.dump({"clip_embedding": torch.cat(all_embeddings, dim=0), "captions": all_captions}, f)
 
@@ -42,6 +48,7 @@ def main(clip_model_type: str):
     print('Done')
     print("%0d embeddings saved " % len(all_embeddings))
     return 0
+
 
 
 if __name__ == '__main__':
