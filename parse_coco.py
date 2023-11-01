@@ -9,14 +9,20 @@ from tqdm import tqdm
 import argparse
 
 
-def main(clip_model_type: str):
+def main(clip_model_type: str,train_val = "train"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cuda:0')
     clip_model_name = clip_model_type.replace('/', '_')
-    out_path = f"./data/coco/small_oscar_split_{clip_model_name}_train.pkl"
+    if train_val == "train":
+        out_path = f"./data/coco/oscar_split_{clip_model_name}_train.pkl"
+        with open('./data/coco/annotations/train_caption.json', 'r') as f:
+            data = json.load(f)
+    else:
+        out_path = f"./coco_train/oscar_split_{clip_model_name}_val.pkl"
+        with open('./coco_train/annotation_val_propre.json', 'r') as f:
+            data = json.load(f)
     clip_model, preprocess = clip.load(clip_model_type, device=device, jit=False)
-    with open('./data/coco/annotations/train_caption.json', 'r') as f:
-        data = json.load(f)
+    
     print("%0d captions loaded from json " % len(data))
     all_embeddings = []
     all_captions = []
@@ -55,4 +61,4 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32'))
     args = parser.parse_args()
-    exit(main(args.clip_model_type))
+    exit(main(args.clip_model_type, "val"))

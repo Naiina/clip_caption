@@ -307,6 +307,7 @@ def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     epochs = args.epochs
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+   
     model = model.to(device)
     model.train()
     optimizer = AdamW(model.parameters(), lr=lr)
@@ -363,7 +364,7 @@ def main():
     parser.add_argument('--data', default='./data/coco/oscar_split_train.pkl')
     parser.add_argument('--out_dir', default='./checkpoints')
     parser.add_argument('--prefix', default='coco_prefix', help='prefix for saved filenames')
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=7)
     #parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--save_every', type=int, default=1)
     parser.add_argument('--prefix_length', type=int, default=10)
@@ -382,15 +383,16 @@ def main():
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
-    if True:
-        model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
-                                  num_layers=args.num_layers, mapping_type=args.mapping_type)
-        print("Train only prefix")
-    else:
-        model = ClipCaptionModel(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
-                                  num_layers=args.num_layers, mapping_type=args.mapping_type)
-        print("Train both prefix and GPT")
-        sys.stdout.flush()
+    #if True:
+    #    model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
+    #                              num_layers=args.num_layers, mapping_type=args.mapping_type)
+    #    print("Train only prefix")
+    #else:
+    #    model = ClipCaptionModel(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
+    #                              num_layers=args.num_layers, mapping_type=args.mapping_type)
+    #    print("Train both prefix and GPT")
+    #    sys.stdout.flush()
+    model = load_model("coco_train/coco_prefix_latest.pt")
     train(dataset, model, args, output_dir=args.out_dir, output_prefix=args.prefix)
 
 

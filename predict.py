@@ -1,20 +1,24 @@
 # Prediction interface for Cog ⚙️
 # Reference: https://github.com/replicate/cog/blob/main/docs/python.md
 
-#import clip
+import clip
 import os
-#import argparse
-#from torch import nn
+import argparse
+from torch import nn
 import numpy as np
-#import torch
-#import torch.nn.functional as nnf
+import torch
+import torch.nn.functional as nnf
 import sys
-#from typing import Tuple, List, Union, Optional
-#from train import ClipCaptionModel, ClipCaptionPrefix, MappingType 
-#from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
+from typing import Tuple, List, Union, Optional
+from train import ClipCaptionModel, ClipCaptionPrefix, MappingType 
+from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 import skimage.io as io
 import PIL.Image
 import json
+from os import listdir
+from PIL import Image 
+from tqdm import tqdm
+
 
 #import cog
 
@@ -30,7 +34,8 @@ WEIGHTS_PATHS = {
 }
 
 #D = torch.device
-#CPU = torch.device("cpu")
+
+CPU = torch.device("cpu")
 
 
 
@@ -175,7 +180,7 @@ def generate2(
     return generated_list[0]
 
 
-def main( image_path, weights_path, use_beam_search = False):
+def main(use_beam_search = False):
 
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -201,6 +206,7 @@ def main( image_path, weights_path, use_beam_search = False):
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
+    weights_path = "coco_train/coco_prefix_latest.pt"
     if True:
         model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
                                   num_layers=args.num_layers, mapping_type=args.mapping_type)
@@ -209,45 +215,71 @@ def main( image_path, weights_path, use_beam_search = False):
     model = model.eval()
     model = model.to(device)
 
-
-    """Run a single prediction on the model"""
-    image = io.imread(image_path)
-    pil_image = PIL.Image.fromarray(image)
-    image = preprocess(pil_image).unsqueeze(0).to(device)
-    with torch.no_grad():
-        prefix = clip_model.encode_image(image).to(
-            device, dtype=torch.float32
-        )
-        prefix_embed = model.clip_project(prefix).reshape(1, prefix_length, -1)
-    if use_beam_search:
-        return generate_beam(model, tokenizer, embed=prefix_embed)[0]
-    else:
-        return generate2(model, tokenizer, embed=prefix_embed)
-
-
+    #create_annotation_val_file()
     
+    
+    predicted_captions = []
+
+    i = 0
+    for f in tqdm(listdir("data/coco/val2014")):
+        #d = data[elem]
+        i = i+1
+        img_id = int(f[19:-4])
+        #filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
+        image = io.imread("data/coco/val2014/"+f)
+        pil_image = PIL.Image.fromarray(image)
+        image = preprocess(pil_image).unsqueeze(0).to(device)
+        with torch.no_grad():
+            prefix = clip_model.encode_image(image).to(
+                device, dtype=torch.float32
+            )
+        prefix_embed = model.clip_project(prefix).reshape(1, prefix_length, -1)
+        if use_beam_search:
+            out = generate_beam(model, tokenizer, embed=prefix_embed)[0]
+        else:
+            out = generate2(model, tokenizer, embed=prefix_embed)
+        d = {"image_id": img_id, "caption": out}
+        predicted_captions.append(d)
+        if i%10000 == 0:
+            json_object = json.dumps(predicted_captions)
+            with open("coco_train/predicted_captions.json", "w") as outfile:
+                outfile.write(json_object)
+    
+    json_object = json.dumps(predicted_captions)
+    with open("coco_train/predicted_captions.json", "w") as outfile:
+        outfile.write(json_object)
+    """Run a single prediction on the model"""
+    
+
+#COCO_val2014_000000000042.jpg
+    
+def create_annotation_val_file():
+    annotation_val = []
+    l_image_val = [int(f[19:-4]) for f in listdir("data/coco/val2014")]
+    with open('./data/coco/annotation2/captions_val2014.json', 'r') as f:
+        data = json.load(f)
+    data_val = data["annotations"]
+    with open('./data/coco/annotation2/captions_train2014.json', 'r') as f:
+        data = json.load(f)
+    data_train = data["annotations"]
+
+    i = 0
+    for image_id in l_image_val:
+        i+=1
+        if i%1000 == 0:
+            print("%0d images" %i)
+        for elem in data_train:
+            if int(elem["image_id"]) == image_id:
+                annotation_val.append(elem)
+        for elem in data_val:
+            if int(elem["image_id"]) == image_id:
+                annotation_val.append(elem)
+    print(len(annotation_val))
+    json_object = json.dumps(annotation_val)
+    with open("annotation_val2.json", "w") as outfile:
+        outfile.write(json_object)
 
 
 if __name__ == '__main__':
-    #weights_path = "coco_train/coco_prefix_latest.pt"
-    with open('./data/coco/annotations2/captions_val2014.json', 'r') as f:
-        data = json.load(f)
-    data_val = data["annotations"]
-    #print(" captions loaded from json ", len(data["annotations"]))
-    with open('./data/coco/annotations2/captions_train2014.json', 'r') as f:
-        data = json.load(f)
-    data_train = data["annotations"]
-    print("%0d train2 captions loaded from json " % len(data["annotations"]))
-    data_val.update(data_train)
-    #with open('./data/coco/annotations/captions_train2014.json', 'r') as f:
-    #    data = json.load(f)
-    #print("%0d train captions loaded from json " % len(data))
-
-    #pred_captions = {}
-    #for i in tqdm(range(len(data))):
-    #    d = data[i]
-    #    img_id = d["image_id"]
-    #    filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
-    #    out = main(filename, weights_path)
-    #    pred_captions[img_id] = out
+    main()
     
