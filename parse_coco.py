@@ -27,7 +27,7 @@ def main(clip_model_type: str,train_val = "train"):
     all_embeddings = []
     all_captions = []
     for i in tqdm(range(len(data))):
-    #for i in tqdm(range(1000)):
+    #for i in tqdm(range(100)):
         d = data[i]
         img_id = d["image_id"]
         filename = f"./data/coco/train2014/COCO_train2014_{int(img_id):012d}.jpg"

@@ -17,7 +17,102 @@ class MappingType(Enum):
     MLP = 'mlp'
     Transformer = 'transformer'
 
+class ClipCocoDataset_bloom(Dataset):
 
+    def __len__(self) -> int:
+        return len(self.captions_tokens)
+
+    def pad_tokens(self, item: int):
+        tokens = self.captions_tokens[item]
+        padding = self.max_seq_len - tokens.shape[0]
+        if padding > 0:
+            tokens = torch.cat((tokens, torch.zeros(padding, dtype=torch.int64) - 1))
+            self.captions_tokens[item] = tokens
+        elif padding < 0:
+            tokens = tokens[:self.max_seq_len]
+            self.captions_tokens[item] = tokens
+        mask = tokens.ge(0)  # mask is zero where we out of sequence
+        tokens[~mask] = 0
+        mask = mask.float()
+        mask = torch.cat((torch.ones(self.prefix_length), mask), dim=0)  # adding prefix mask
+        return tokens, mask
+
+    def __getitem__(self, item: int) -> Tuple[torch.Tensor, ...]:
+        tokens, mask = self.pad_tokens(item)
+        prefix = self.prefixes[self.caption2embedding[item]]
+        if self.normalize_prefix:
+            prefix = prefix.float()
+            prefix = prefix / prefix.norm(2, -1) #norm 2 alomg dim -1
+        return tokens, mask, prefix
+
+    def __init__(self, data_path: str,  prefix_length: int,
+                 normalize_prefix=False):
+        #self.tokenizer = GPT2Tokenizer.from_pretrained(gpt2_type)
+        self.tokenizer_bloom =  AutoTokenizer.from_pretrained("bigscience/bloom-560m")
+        self.prefix_length = prefix_length
+        self.normalize_prefix = normalize_prefix
+        with open(data_path, 'rb') as f:
+            all_data = pickle.load(f)
+        print("Data size is %0d" % len(all_data["clip_embedding"]))
+        sys.stdout.flush()
+        self.prefixes = all_data["clip_embedding"]
+        captions_raw = all_data["captions"]
+        self.image_ids = [caption["image_id"] for caption in captions_raw]
+        self.captions = [caption['caption'] for caption in captions_raw]
+        if os.path.isfile(f"{data_path[:-4]}_tokens.pkl"):
+            with open(f"{data_path[:-4]}_tokens.pkl", 'rb') as f:
+                self.captions_tokens, self.caption2embedding, self.max_seq_len = pickle.load(f)
+        else:
+            self.captions_tokens = []
+            self.caption2embedding = []
+            max_seq_len = 0
+            for caption in captions_raw:
+                self.captions_tokens.append(torch.tensor(self.tokenizer_bloom.encode(caption['caption']), dtype=torch.int64))
+                self.caption2embedding.append(caption["clip_embedding"])
+                max_seq_len = max(max_seq_len, self.captions_tokens[-1].shape[0])
+            
+            with open(f"{data_path[:-4]}_tokens.pkl", 'wb') as f:
+                pickle.dump([self.captions_tokens, self.caption2embedding, max_seq_len], f)
+            
+        all_len = torch.tensor([len(self.captions_tokens[i]) for i in range(len(self))]).float()
+        self.max_seq_len = min(int(all_len.mean() + all_len.std() * 10), int(all_len.max())) #16 on first 10 data
+    #raw capt: list of dict [{'image_id': '318556', 'id': 48, 'caption': 'blabla', 'clip_embedding': 0}, {}, ..]
+    # capt_token: list of tensors. for each tensor: one int per word in the caption
+    # all data: tensor nb_data*prefix_lenght. encoded image by clip
+
+
+class MLP(nn.Module):
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.model(x)
+
+    def __init__(self, sizes: Tuple[int, ...], bias=True, act=nn.Tanh):
+        super(MLP, self).__init__()
+        layers = []
+        for i in range(len(sizes) - 1):
+            layers.append(nn.Linear(sizes[i], sizes[i + 1], bias=bias))
+            if i < len(sizes) - 2:
+                layers.append(act())
+        self.model = nn.Sequential(*layers)
+
+
+class MlpTransformer(nn.Module):
+    def __init__(self, in_dim, h_dim, out_d: Optional[int] = None, act=nnf.relu, dropout=0.):
+        super().__init__()
+        out_d = out_d if out_d is not None else in_dim
+        self.fc1 = nn.Linear(in_dim, h_dim)
+        self.act = act
+        self.fc2 = nn.Linear(h_dim, out_d)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        x = self.dropout(x)
+        return x
+    
 class ClipCocoDataset(Dataset):
 
     def __len__(self) -> int:
@@ -142,6 +237,7 @@ class MultiHeadAttention(nn.Module):
         attention = attention.softmax(dim=2)
         out = torch.einsum('bnmh,bmhd->bnhd', attention, values).reshape(b, n, c)
         out = self.project(out)
+
         return out, attention
 
 
@@ -163,6 +259,7 @@ class TransformerLayer(nn.Module):
         super().__init__()
         self.norm1 = norm_layer(dim_self)
         self.attn = MultiHeadAttention(dim_self, dim_ref, num_heads, bias=bias, dropout=dropout)
+        #self.attn = MultiHeadAttention()
         self.norm2 = norm_layer(dim_self)
         self.mlp = MlpTransformer(dim_self, int(dim_self * mlp_ratio), act=act, dropout=dropout)
 
@@ -220,11 +317,57 @@ class TransformerMapper(nn.Module):
         self.linear = nn.Linear(dim_clip, clip_length * dim_embedding)
         self.prefix_const = nn.Parameter(torch.randn(prefix_length, dim_embedding), requires_grad=True)
 
+class ClipCaptionModel_bloom(nn.Module):
+
+    def get_dummy_token(self, batch_size: int, device: torch.device) -> torch.Tensor:
+        #return torch.zeros(batch_size, self.prefix_length, dtype=torch.int64, device=device)
+        return torch.ones(batch_size, self.prefix_length, dtype=torch.int64, device=device) * -100
+
+    def forward(self, tokens: torch.Tensor, prefix: torch.Tensor, mask: Optional[torch.Tensor] = None,
+                labels: Optional[torch.Tensor] = None):
+        #embedding_text = self.gpt.transformer.wte(tokens)
+
+        embedding_text = self.embedding_func(tokens) #size N, 1024
+        prefix_projections = self.clip_project(prefix).view(-1, self.prefix_length, self.bloom_embedding_size)
+
+        ##self.gpt_embedding_size = 768
+        ##prefix_projections.size() = batch_size * pref_lenght * gpt_emb_size ie 10*40*768
+        ##embedding_text.size() = batch_size * caption_max_lenght * gpt_emb_size
+        ##prefix.size() = batchsize * 512
+        ##self.clip_project(prefix).size() = prefix_proj.size()
+        embedding_cat = torch.cat((prefix_projections, embedding_text), dim=1)
+        if labels is not None:
+            dummy_token = self.get_dummy_token(tokens.shape[0], tokens.device)
+            labels = torch.cat((dummy_token, tokens), dim=1)
+
+
+        #out = self.gpt(inputs_embeds=embedding_cat, labels=labels, attention_mask=mask)
+        out_bloom = self.model_bloom(inputs_embeds=embedding_cat, labels=labels, attention_mask=mask)
+
+        return out_bloom
+
+    def __init__(self, prefix_length: int, clip_length: Optional[int] = None, prefix_size: int = 512,
+                 num_layers: int = 8, mapping_type: MappingType = MappingType.Transformer):
+        super(ClipCaptionModel, self).__init__()
+        self.prefix_length = prefix_length
+        #self.gpt = GPT2LMHeadModel.from_pretrained('gpt2')
+        #self.gpt_embedding_size = self.gpt.transformer.wte.weight.shape[1]
+        self.bloom_embedding_size = 1024
+        if mapping_type == MappingType.MLP:
+            self.clip_project = MLP((prefix_size, (self.bloom_embedding_size * prefix_length) // 2,
+                                     self.bloom_embedding_size * prefix_length))
+        else:
+            self.clip_project = TransformerMapper(prefix_size, self.bloom_embedding_size, prefix_length,
+                                                                     clip_length, num_layers)
+        
+        self.model_bloom = BloomForCausalLM.from_pretrained("bigscience/bloom-560m")
+        self.embedding_func = self.model_bloom.get_input_embeddings()
 
 class ClipCaptionModel(nn.Module):
 
     def get_dummy_token(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        return torch.zeros(batch_size, self.prefix_length, dtype=torch.int64, device=device)
+        #return torch.zeros(batch_size, self.prefix_length, dtype=torch.int64, device=device)
+        return torch.ones(batch_size, self.prefix_length, dtype=torch.int64, device=device)*-100
 
     def forward(self, tokens: torch.Tensor, prefix: torch.Tensor, mask: Optional[torch.Tensor] = None,
                 labels: Optional[torch.Tensor] = None):
@@ -264,7 +407,8 @@ class ClipCaptionPrefix(ClipCaptionModel):
 
     def train(self, mode: bool = True):
         super(ClipCaptionPrefix, self).train(mode)
-        self.gpt.eval()
+        #self.gpt.eval()
+        self.gpt.train()
         return self
 
 
@@ -332,7 +476,7 @@ def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             #torch_size: batch_size*max_len_caption*50257
             
             
-            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=0)
+            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=-100)
             l_loss.append(loss)
             loss.backward()
             optimizer.step()
@@ -364,12 +508,13 @@ def main():
     parser.add_argument('--data', default='./data/coco/oscar_split_train.pkl')
     parser.add_argument('--out_dir', default='./checkpoints')
     parser.add_argument('--prefix', default='coco_prefix', help='prefix for saved filenames')
-    parser.add_argument('--epochs', type=int, default=7)
+    parser.add_argument('--epochs', type=int, default=10)
     #parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--save_every', type=int, default=1)
     parser.add_argument('--prefix_length', type=int, default=10)
     parser.add_argument('--prefix_length_clip', type=int, default=10)
     parser.add_argument('--bs', type=int, default=40)
+    parser.add_argument('--nina_modif', type=bool, default=False)
     #parser.add_argument('--bs', type=int, default=2)
     parser.add_argument('--only_prefix', dest='only_prefix', action='store_true')
     parser.add_argument('--mapping_type', type=str, default='mlp', help='mlp/transformer')
@@ -383,16 +528,16 @@ def main():
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
-    #if True:
-    #    model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
-    #                              num_layers=args.num_layers, mapping_type=args.mapping_type)
-    #    print("Train only prefix")
+    if True:
+        model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
+                                  num_layers=args.num_layers, mapping_type=args.mapping_type)
+        print("Train only prefix")
     #else:
     #    model = ClipCaptionModel(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
     #                              num_layers=args.num_layers, mapping_type=args.mapping_type)
     #    print("Train both prefix and GPT")
     #    sys.stdout.flush()
-    model = load_model("coco_train/coco_prefix_latest.pt")
+    #model = load_model("coco_train/coco_prefix_latest.pt")
     train(dataset, model, args, output_dir=args.out_dir, output_prefix=args.prefix)
 
 

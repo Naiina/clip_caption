@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as nnf
 import sys
 from typing import Tuple, List, Union, Optional
-from train import ClipCaptionModel, ClipCaptionPrefix, MappingType 
+from train_bloom import ClipCaptionModel, ClipCaptionPrefix, MappingType 
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 import skimage.io as io
 import PIL.Image
@@ -18,6 +18,7 @@ import json
 from os import listdir
 from PIL import Image 
 from tqdm import tqdm
+from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModel , BloomForCausalLM
 
 
 #import cog
@@ -26,12 +27,6 @@ from tqdm import tqdm
 
 
 
-WEIGHTS_PATHS = {
-    #"coco": "coco_weights.pt",
-    "coco": "coco_train/coco_prefix_latest.pt"
-
-    #"conceptual-captions": "conceptual_weights.pt",
-}
 
 #D = torch.device
 
@@ -64,9 +59,9 @@ def generate_beam(
             if tokens is None:
                 tokens = torch.tensor(tokenizer.encode(prompt))
                 tokens = tokens.unsqueeze(0).to(device)
-                generated = model.gpt.transformer.wte(tokens)
+                generated = model.embedding_func(tokens)
         for i in range(entry_length):
-            outputs = model.gpt(inputs_embeds=generated)
+            outputs = model.modell(inputs_embeds=generated)
             logits = outputs.logits
             logits = logits[:, -1, :] / (temperature if temperature > 0 else 1.0)
             logits = logits.softmax(-1).log()
@@ -97,7 +92,7 @@ def generate_beam(
                 generated = generated[next_tokens_source]
                 scores = scores_sum_average * seq_lengths
                 is_stopped = is_stopped[next_tokens_source]
-            next_token_embed = model.gpt.transformer.wte(next_tokens.squeeze()).view(
+            next_token_embed = model.embedding_func(next_tokens.squeeze()).view(
                 generated.shape[0], 1, -1
             )
             generated = torch.cat((generated, next_token_embed), dim=1)
@@ -144,11 +139,11 @@ def generate2(
                     tokens = torch.tensor(tokenizer.encode(prompt))
                     tokens = tokens.unsqueeze(0).to(device)
 
-                generated = model.gpt.transformer.wte(tokens)
+                generated = model.embedding_func(tokens)
 
             for i in range(entry_length):
 
-                outputs = model.gpt(inputs_embeds=generated)
+                outputs = model.modell(inputs_embeds=generated)
                 logits = outputs.logits
                 logits = logits[:, -1, :] / (temperature if temperature > 0 else 1.0)
                 sorted_logits, sorted_indices = torch.sort(logits, descending=True)
@@ -164,7 +159,7 @@ def generate2(
                 indices_to_remove = sorted_indices[sorted_indices_to_remove]
                 logits[:, indices_to_remove] = filter_value
                 next_token = torch.argmax(logits, -1).unsqueeze(0)
-                next_token_embed = model.gpt.transformer.wte(next_token)
+                next_token_embed = model.embedding_func(next_token)
                 if tokens is None:
                     tokens = next_token
                 else:
@@ -187,11 +182,13 @@ def main(use_beam_search = False):
     clip_model, preprocess = clip.load(
         "ViT-B/32", device=device, jit=False
     )
-    tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    #tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
+    
 
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--prefix_length', type=int, default=10)
+    parser.add_argument('--train_or_val', type=str)
     parser.add_argument('--prefix_length_clip', type=int, default=10)
     parser.add_argument('--bs', type=int, default=40)
     #parser.add_argument('--bs', type=int, default=2)
@@ -201,16 +198,26 @@ def main(use_beam_search = False):
     parser.add_argument('--num_layers', type=int, default=8)
     parser.add_argument('--is_rn', dest='is_rn', action='store_true')
     parser.add_argument('--normalize_prefix', dest='normalize_prefix', action='store_true')
+    parser.add_argument("--coco_train_path")
+    parser.add_argument("--checkpoint", default = "latest")
+    parser.add_argument("--model_name", default = "bloom")
     args = parser.parse_args()
+    model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
+    tokenizer =  AutoTokenizer.from_pretrained(model_name)
     prefix_length = args.prefix_length
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
-    weights_path = "coco_train/coco_prefix_latest.pt"
+    #weights_path = "coco_train/coco_prefix_latest.pt"
     if True:
-        model = ClipCaptionPrefix(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
+        model = ClipCaptionPrefix(prefix_length, model_name = model_name, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
                                   num_layers=args.num_layers, mapping_type=args.mapping_type)
         
+    
+    if args.checkpoint == "latest":
+        weights_path = (args.coco_train_path+"coco_prefix_"+args.checkpoint+".pt")
+    else :
+        weights_path = (args.coco_train_path+"coco_prefix-"+args.checkpoint+".pt")
     model.load_state_dict(torch.load(weights_path, map_location=CPU))
     model = model.eval()
     model = model.to(device)
@@ -221,12 +228,20 @@ def main(use_beam_search = False):
     predicted_captions = []
 
     i = 0
-    for f in tqdm(listdir("data/coco/val2014")):
+    if args.train_or_val == "val":
+        data_path = "data/coco/val2014/"
+    else:
+        data_path = "data/coco/train2014/"
+    #print(data_path)
+    #exit()
+    for f in tqdm(listdir(data_path)):
         #d = data[elem]
         i = i+1
+        if i>10:
+            exit()
         img_id = int(f[19:-4])
         #filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
-        image = io.imread("data/coco/val2014/"+f)
+        image = io.imread(data_path+f)
         pil_image = PIL.Image.fromarray(image)
         image = preprocess(pil_image).unsqueeze(0).to(device)
         with torch.no_grad():
@@ -239,47 +254,52 @@ def main(use_beam_search = False):
         else:
             out = generate2(model, tokenizer, embed=prefix_embed)
         d = {"image_id": img_id, "caption": out}
+        print(out)
         predicted_captions.append(d)
         if i%10000 == 0:
-            json_object = json.dumps(predicted_captions)
-            with open("coco_train/predicted_captions.json", "w") as outfile:
-                outfile.write(json_object)
-    
+            #with open('filename', 'w', encoding='utf8') as json_file:
+            #    json.dump("ברי צקלה", json_file, ensure_ascii=False)
+            #json_object = json.dumps(predicted_captions)
+
+            with open(args.coco_train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w", encoding = 'utf8') as outfile:
+                json.dump(predicted_captions, outfile, ensure_ascii=False)
+     
     json_object = json.dumps(predicted_captions)
-    with open("coco_train/predicted_captions.json", "w") as outfile:
+    with open(args.coco_train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w") as outfile:
         outfile.write(json_object)
-    """Run a single prediction on the model"""
+    
     
 
 #COCO_val2014_000000000042.jpg
     
 def create_annotation_val_file():
-    annotation_val = []
-    l_image_val = [int(f[19:-4]) for f in listdir("data/coco/val2014")]
-    with open('./data/coco/annotation2/captions_val2014.json', 'r') as f:
+    
+    image_path = "data/coco/val2014"
+    caption_path = './data/coco/annotation2/captions_val2014.json'
+  
+    l_annotation = []
+    l_image = [int(f[19:-4]) for f in listdir(image_path)]
+    
+    with open(caption_path, 'r') as f:
         data = json.load(f)
-    data_val = data["annotations"]
-    with open('./data/coco/annotation2/captions_train2014.json', 'r') as f:
-        data = json.load(f)
-    data_train = data["annotations"]
+    data_annot = data["annotations"]
+    
 
     i = 0
-    for image_id in l_image_val:
+    for image_id in l_image:
         i+=1
-        if i%1000 == 0:
+        if i%10000 == 0:
             print("%0d images" %i)
-        for elem in data_train:
+        for elem in data_annot:
             if int(elem["image_id"]) == image_id:
-                annotation_val.append(elem)
-        for elem in data_val:
-            if int(elem["image_id"]) == image_id:
-                annotation_val.append(elem)
-    print(len(annotation_val))
-    json_object = json.dumps(annotation_val)
+                l_annotation.append(elem)
+    print(len(l_annotation))
+    json_object = json.dumps(l_annotation)
     with open("annotation_val2.json", "w") as outfile:
         outfile.write(json_object)
 
 
 if __name__ == '__main__':
+    
     main()
     
