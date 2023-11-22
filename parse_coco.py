@@ -9,6 +9,7 @@ from tqdm import tqdm
 import argparse
 
 
+
 def main(clip_model_type: str,train_val = "train"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cuda:0')

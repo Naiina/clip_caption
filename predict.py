@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as nnf
 import sys
 from typing import Tuple, List, Union, Optional
-from train_bloom import ClipCaptionModel, ClipCaptionPrefix, MappingType 
+from train import ClipCaptionModel, ClipCaptionPrefix, MappingType 
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 import skimage.io as io
 import PIL.Image

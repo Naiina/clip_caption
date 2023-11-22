@@ -233,8 +233,8 @@ class TransformerMapper(nn.Module):
 class ClipCaptionModel(nn.Module):
 
     def get_dummy_token(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        return torch.zeros(batch_size, self.prefix_length, dtype=torch.int64, device=device)
-        #return torch.ones(batch_size, self.prefix_length, dtype=torch.int64, device=device) * -100
+        #return torch.zeros(batch_size, self.prefix_length, dtype=torch.int64, device=device)
+        return torch.ones(batch_size, self.prefix_length, dtype=torch.int64, device=device) * -100
 
     def forward(self, tokens: torch.Tensor, prefix: torch.Tensor, mask: Optional[torch.Tensor] = None,
                 labels: Optional[torch.Tensor] = None):
@@ -328,7 +328,7 @@ def load_model(model_name, config_path: str, epoch_or_latest: Union[str, int] = 
     return model, parser
 
 
-def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
+def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
           lr: float = 2e-5, warmup_steps: int = 5000, output_dir: str = ".", output_prefix: str = ""):
     
     #device = torch.device('cuda:0')
@@ -347,7 +347,7 @@ def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     )
     # save_config(args)
     #for epoch in range(epochs):
-    for epoch in range(10):
+    for epoch in range(nb_epochs):
         print(f">>> Training epoch {epoch}")
         sys.stdout.flush()
         progress = tqdm(total=len(train_dataloader), desc=output_prefix)
@@ -364,7 +364,7 @@ def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             #torch_size: batch_size*max_len_caption*50257
             
             
-            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=0)
+            loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=-100)
             l_loss.append(loss)
             loss.backward()
             optimizer.step()
@@ -378,6 +378,7 @@ def train(dataset: ClipCocoDataset, model: ClipCaptionModel, args,
                     model.state_dict(),
                     os.path.join(output_dir, f"{output_prefix}_latest.pt"),
                 )
+            
         
         progress.close()
         if epoch % args.save_every == 0 or epoch == epochs - 1:
@@ -414,6 +415,7 @@ def main():
     args = parser.parse_args()
     model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
     prefix_length = args.prefix_length
+    nb_epochs = args.epochs
     dataset = ClipCocoDataset(args.data, prefix_length, model_name, normalize_prefix=args.normalize_prefix)
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
@@ -429,7 +431,7 @@ def main():
     #    print("Train both prefix and GPT")
     #    sys.stdout.flush()
     #model = load_model("coco_train/coco_prefix_latest.pt")
-    train(dataset, model, args, output_dir=args.out_dir, output_prefix=args.prefix)
+    train(nb_epochs, dataset, model, args, output_dir=args.out_dir, output_prefix=args.prefix)
 
 
 
