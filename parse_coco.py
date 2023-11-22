@@ -8,7 +8,7 @@ import os
 from tqdm import tqdm
 import argparse
 
-
+torch.manual_seed(0)
 
 def main(clip_model_type: str,train_val = "train"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

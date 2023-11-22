@@ -20,6 +20,9 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModel , BloomForCausalLM
 
+torch.manual_seed(0)
+np.random.seed(0)
+
 
 #import cog
 

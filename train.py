@@ -4,7 +4,7 @@ from torch.nn import functional as nnf
 from torch.utils.data import Dataset, DataLoader
 from enum import Enum
 #from transformers import GPT2Tokenizer, GPT2LMHeadModel
-from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModel , BloomForCausalLM
+from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModel , BloomForCausalLM, AutoModelForCausalLM
 from tqdm import tqdm
 import os
 import pickle
@@ -12,6 +12,12 @@ import sys
 import argparse
 import json
 from typing import Tuple, Optional, Union
+
+
+
+torch.manual_seed(0)
+#random.seed(0)
+
 
 class ModelName(Enum):
     Bloom = 'bigscience/bloom-560m'
@@ -267,7 +273,8 @@ class ClipCaptionModel(nn.Module):
         #self.bloom_embedding_size = 1024
         print(model_name)
         if model_name == "bigscience/bloom-560m":
-            self.modell = BloomForCausalLM.from_pretrained("bigscience/bloom-560m")
+            #self.modell = BloomForCausalLM.from_pretrained("bigscience/bloom-560m")
+            self.modell = AutoModelForCausalLM.from_pretrained("bigscience/bloom-560m")
         else:
             self.modell = AutoModel.from_pretrained(model_name)
         self.embedding_func = self.modell.get_input_embeddings()
