@@ -5,13 +5,16 @@ from tqdm import tqdm
 
 from datasets import load_metric
 
-metric = load_metric("./rouge")
+from pycocotools.coco import COCO
+from pycocoevalcap.eval import COCOEvalCap
+import pdb
 
-CLIP_prefix_caption/s2
 
-
-path = "../coco_train_nina_modif_los/"
+path = "../coco_train_nina_modif_loss/"
 checkpoint = "002"
+metric = "spice"
+
+
 
 
 def convert(l_pred, l_annot):
@@ -68,6 +71,96 @@ def convert_to_list_for_rouge (path,d_annot, d_pred):
         json.dump(l_annot_r, outfile)
     
 
+
+
+
+
+def convert_annot_to_spice_format(annot_file,out_path):
+    with open(annot_file, "r") as f:
+        annot = json.load(f)
+
+    annotation_file_spice = '../pycocoevalcap/example/captions_val2014.json'
+    with open(annotation_file_spice, "r") as f:
+        annot_spice = json.load(f)
+
+    annot_spice["annotations"] = annot
+    with open(out_path+"annot_val_spice_format.json", 'w') as outfile:
+        json.dump(annot_spice, outfile)
+    return out_path+"annot_val_spice_format.json"
+
+
+
+
+def compute_score(predict_folder,predict_file,metric,train_or_val):
+    if metric == "rouge":
+        #keys_mismatch(d_pred,d_annot)
+        #print_some_capt(d_annot,d_pred)
+
+        #convert_to_list_for_rouge(path,d_pred, d_annot)
+        met = load_metric("./rouge")
+        annotation_file = path+'l_pred_r_'+val_or_train+'_'+checkpoint+'.json'
+        #predict_file = path+"l_annot_r_"+val_or_train+"_"+checkpoint+".json"
+
+        with open(predict_folder+predict_file, "r") as f:
+            predictions = json.load(f)
+        with open(annotation_file, "r") as f:
+            references = json.load(f)
+        #pred = [elem[0] for elem in predictions]
+
+        #references = [["The quick brown fox jumps over the lazy dog","The quick brown fox jumps over the lazy dog"],["hey"]]
+        #predictions = ["The quick brown fox jumps over the lazy dog.","hey"]
+
+        result = met.compute(predictions=predictions, references=references, language="en")
+
+        result = {key: round(value.mid.fmeasure, 4) * 100 for key, value in result.items()}
+        print(f"Language: English, result: {result}")
+
+        results = rouge.compute(predictions=predictions, references=references)
+        print(results)
+    if metric == "spice":
+        
+        #results_file = '../pycocoevalcap/example/captions_val2014_fakecap_results.json'
+        predicted_capt = predict_folder + predict_file
+
+        annot_path = "data/coco/annotations/"
+        annot_file = annot_path+"annotation_val_propre.json"
+        annot_spice_file = convert_annot_to_spice_format(annot_file,annot_path)
+
+        #with open(annot_spice_file, "r") as f:
+        #    annot = json.load(f)
+        #pdb.set_trace()
+
+        
+
+        # create coco object and coco_result object
+        #coco = COCO(annotation_file)
+        coco = COCO(annot_spice_file)
+        #print(coco)
+        #
+        coco_result = coco.loadRes(predicted_capt)
+
+        # create coco_eval object by taking coco and coco_result
+        coco_eval = COCOEvalCap(coco, coco_result)
+
+        # evaluate on a subset of images by setting
+        # coco_eval.params['image_id'] = coco_result.getImgIds()
+        # please remove this line when evaluating the full validation set
+        coco_eval.params['image_id'] = coco_result.getImgIds()
+
+        # evaluate results
+        # SPICE will take a few minutes the first time, but speeds up due to caching
+        coco_eval.evaluate()
+
+        # print output evaluation scores
+        for metric, score in coco_eval.eval.items():
+            print(f'{metric}: {score:.3f}')
+
+
+compute_score("coco_train_nina_modif_loss2/","predicted_captions_val_002.json","spice","val")
+
+exit()
+
+
 if val_or_train == "val":
     predict_file = path + 'predicted_captions_val_'+checkpoint+'.json'
     annotation_file = "../data/coco/annotations/annotation_val_propre.json"
@@ -81,45 +174,8 @@ with open(annotation_file, "r") as f:
     l_annot = json.load(f)
 
 d_pred, d_annot  = convert(l_predicted, l_annot)
-keys_mismatch(d_pred,d_annot)
-#print_some_capt(d_annot,d_pred)
-
-convert_to_list_for_rouge(path,d_pred, d_annot)
 
 
 
 
 
-
-
-
-
-
-
-#rouge = evaluate.load('rouge')
-
-
-annotation_file = path+'l_pred_r_'+val_or_train+'_'+checkpoint+'.json'
-predict_file = path+"l_annot_r_"+val_or_train+"_"+checkpoint+".json"
-
-with open(predict_file, "r") as f:
-    predictions = json.load(f)
-with open(annotation_file, "r") as f:
-    references = json.load(f)
-#pred = [elem[0] for elem in predictions]
-
-#references = [["The quick brown fox jumps over the lazy dog","The quick brown fox jumps over the lazy dog"],["hey"]]
-#predictions = ["The quick brown fox jumps over the lazy dog.","hey"]
-
-result = metric.compute(predictions=predictions, references=references, language="en")
-
-result = {key: round(value.mid.fmeasure, 4) * 100 for key, value in result.items()}
-print(f"Language: English, result: {result}")
-
-exit()
-
-
-results = rouge.compute(predictions=predictions, references=references)
-print(results)
-
-exit()
