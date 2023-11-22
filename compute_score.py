@@ -10,9 +10,9 @@ from pycocoevalcap.eval import COCOEvalCap
 import pdb
 
 
-path = "../coco_train_nina_modif_loss/"
-checkpoint = "002"
-metric = "spice"
+path = "coco_train_nina_modif_loss2/"
+
+
 
 
 
@@ -106,7 +106,7 @@ def compute_score(predict_folder,predict_file,metric,train_or_val):
     # evaluate on a subset of images by setting
     # coco_eval.params['image_id'] = coco_result.getImgIds()
     # please remove this line when evaluating the full validation set
-    coco_eval.params['image_id'] = coco_result.getImgIds()
+    #coco_eval.params['image_id'] = coco_result.getImgIds()
 
     # evaluate results
     # SPICE will take a few minutes the first time, but speeds up due to caching
@@ -117,7 +117,7 @@ def compute_score(predict_folder,predict_file,metric,train_or_val):
         print(f'{metric}: {score:.3f}')
 
 
-compute_score("coco_train_nina_modif_loss2/","predicted_captions_val_002.json","spice","val")
+compute_score(path,"predicted_captions_val_002.json","spice","val")
 
 
 
