@@ -353,14 +353,15 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
         optimizer, num_warmup_steps=warmup_steps, num_training_steps=epochs * len(train_dataloader)
     )
     # save_config(args)
-    #for epoch in range(epochs):
-    for epoch in range(nb_epochs):
+    for epoch in range(1):
+    #for epoch in range(nb_epochs):
         print(f">>> Training epoch {epoch}")
         sys.stdout.flush()
         progress = tqdm(total=len(train_dataloader), desc=output_prefix)
         l_loss = []
         for idx, (tokens, mask, prefix) in enumerate(train_dataloader):
-            
+            if idx > 10:
+                exit()
             # tokens: one int per word in the caption + zero padd (from bloom tokeniser)
             # mask: ones(prefix_lenght)+ ones(caption len) + zero padd
             # clip prefix of size batch_size * 512 (clip output)
@@ -373,6 +374,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             
             loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=-100)
             l_loss.append(loss)
+            print(loss)
             loss.backward()
             optimizer.step()
             scheduler.step()
