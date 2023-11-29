@@ -30,10 +30,11 @@ def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
 
     model = ClipCap(cfg.clipcap)
-    ckpt = download_checkpoint(cfg.project_name, cfg.experiment_name)
+    #ckpt = download_checkpoint(cfg.project_name, cfg.experiment_name)
+    ckpt = None
 
     logger = WandbLogger(
-        project=cfg.project_name, log_model="all", id=cfg.experiment_name
+        project=cfg.project_name, log_model="all"
     )
     logger.watch(model)
 
