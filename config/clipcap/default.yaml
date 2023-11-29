@@ -2,3 +2,5 @@ defaults:
   - language_model: bloom
   - vision_model: clip
   - adapter: mlp
+
+prefix_length: 10

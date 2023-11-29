@@ -1,2 +1,2 @@
-data_dir: data/coco/
+data_dir: /rds/user/hpchale2/hpc-work/clipcap/data/coco/
 name: coco

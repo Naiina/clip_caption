@@ -15,19 +15,19 @@ from utils import download_checkpoint
 
 
 def get_splits(cfg) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    train_set = COCODataset(cfg, "train")
-    valid_set = COCODataset(cfg, "val")
-    train_loader = DataLoader(data.Subset(train_set, torch.arange(1000)), num_workers=4)
-    valid_loader = DataLoader(data.Subset(valid_set, torch.arange(1000)), num_workers=4)
+    train_set = COCODataset(cfg.data_dir, "train")
+    valid_set = COCODataset(cfg.data_dir, "val")
+    train_loader = DataLoader(data.Subset(train_set, torch.arange(1000)), batch_size=4, num_workers=4)
+    valid_loader = DataLoader(data.Subset(valid_set, torch.arange(1000)), batch_size=4, num_workers=4)
     test_loader = DataLoader(valid_set, num_workers=4)
     return train_loader, valid_loader, test_loader
 
 
-@hydra.main(config_path="./config", config_name="config")
+@hydra.main(config_path="../config", config_name="config")
 def main(cfg: DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
 
-    model = ClipCap(cfg)
+    model = ClipCap(cfg.clipcap)
     ckpt = download_checkpoint(cfg.project_name, cfg.experiment_name)
 
     logger = WandbLogger(

@@ -1,2 +1,2 @@
 name: bigscience/bloom-560m
-output_dim: 1024
+dim: 1024

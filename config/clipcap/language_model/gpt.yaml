@@ -1,2 +1,2 @@
 name: gpt2 
-output_dim: 768
+dim: 768

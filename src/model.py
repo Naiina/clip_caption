@@ -1,13 +1,15 @@
-import lightning as L
+from typing import Tuple
+
 import clip
 import evaluate
+import lightning as L
 import torch
 import wandb
 from torch import nn
-from transfomers import AutoModel, AutoTokenizer
+from transformers import AutoModel, AutoTokenizer
+
 
 class MLP(nn.Module):
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.model(x)
 
@@ -20,10 +22,12 @@ class MLP(nn.Module):
                 layers.append(act())
         self.model = nn.Sequential(*layers)
 
+
 def freeze(module):
     for param in module.parameters():
         param.requires_grad = False
     return module
+
 
 class ClipCap(L.LightningModule):
     def __init__(self, cfg) -> None:
@@ -33,9 +37,15 @@ class ClipCap(L.LightningModule):
         freeze(self.vision_model)
         self.language_model = freeze(AutoModel.from_pretrained(cfg.language_model.name))
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.language_model.name)
-        self.projector = MLP((cfg.vision_model.dim, (cfg.language_model.dim * cfg.prefix_length) // 2, cfg.language_model.dim * cfg.prefix_length))
+        self.projector = MLP(
+            (
+                cfg.vision_model.dim,
+                (cfg.language_model.dim * cfg.prefix_length) // 2,
+                cfg.language_model.dim * cfg.prefix_length,
+            )
+        )
         self.prefix_length = cfg.prefix_length
-        self.rouge = evaluate.load('rouge')
+        self.rouge = evaluate.load("rouge")
 
     def forward(self, img, tokens):
         batch_size = img.shape[0]
@@ -57,7 +67,9 @@ class ClipCap(L.LightningModule):
             # wandb.define_metric("test_loss", summary="min")
         img, caption = batch
         img = self.preprocess_vis(img)
-        tokens = self.tokenizer(caption, return_tensors="pt", padding=True, truncation=True)
+        tokens = self.tokenizer(
+            caption, return_tensors="pt", padding=True, truncation=True
+        )
         result = self(img, tokens)
         self.log("train_loss", result.loss)
         return result.loss
@@ -65,7 +77,9 @@ class ClipCap(L.LightningModule):
     def validation_step(self, batch, batch_idx):
         img, caption = batch
         img = self.preprocess_vis(img)
-        tokens = self.tokenizer(caption, return_tensors="pt", padding=True, truncation=True)
+        tokens = self.tokenizer(
+            caption, return_tensors="pt", padding=True, truncation=True
+        )
         result = self(img, tokens)
         self.log("val_loss", result.loss)
         preds = torch.argmax(result.logits, dim=2)
@@ -78,7 +92,9 @@ class ClipCap(L.LightningModule):
     def test_step(self, batch, batch_idx):
         img, caption = batch
         img = self.preprocess_vis(img)
-        tokens = self.tokenizer(caption, return_tensors="pt", padding=True, truncation=True)
+        tokens = self.tokenizer(
+            caption, return_tensors="pt", padding=True, truncation=True
+        )
         result = self(img, tokens)
         self.log("val_loss", result.loss)
         preds = torch.argmax(result.logits, dim=2)

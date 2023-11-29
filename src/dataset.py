@@ -1,13 +1,14 @@
 import json
+
 import torch
 from skimage import io
 from pathlib import Path
 from torch.utils.data import Dataset
+from tqdm import tqdm
 
 
 class COCODataset(Dataset):
     def __init__(self, data_dir, split, transform=None):
-        self.clip_model = clip_model
         self.data_dir = Path(data_dir)
         self.split = split
         assert self.split in ["train", "val"]
@@ -19,11 +20,11 @@ class COCODataset(Dataset):
 
     def _get_split(self, captions):
         data = []
-        for cap in captions:
+        for cap in tqdm(captions):
             path = (
                 self.data_dir
                 / f"{self.split}2014"
-                / f"COCO_{self.split}2014_{cap['image_id']:012d}.jpg"
+                / f"COCO_{self.split}2014_{int(cap['image_id']):012d}.jpg"
             )
             if path.is_file():
                 data.append(cap)
@@ -31,7 +32,7 @@ class COCODataset(Dataset):
 
     def __getitem__(self, idx):
         caption = self.captions[idx]
-        img_id = caption["image_id"]
+        img_id = int(caption["image_id"])
         # embed_path = self.data_dir / "embeds" / self.clip_model / f"{img_id}.pt"
         # if embed_path.is_file():
         #     embed = torch.load(embed_path)
