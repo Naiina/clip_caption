@@ -2,9 +2,9 @@ from typing import Tuple
 
 import clip
 import hydra
-import lightning as L
 import torch
 import torch.utils.data as data
+from lightning.pytorch import Trainer, seed_everything
 from lightning.pytorch.loggers import WandbLogger
 from omegaconf import OmegaConf, DictConfig
 from torch.utils.data import DataLoader
@@ -37,7 +37,8 @@ def main(cfg: DictConfig) -> None:
     )
     logger.watch(model)
 
-    trainer = L.Trainer(max_epochs=5, logger=logger)
+    seed_everything(cfg.seed, workers=True)
+    trainer = Trainer(max_epochs=5, logger=logger, deterministic=True)
     train_loader, valid_loader, test_loader = get_splits(cfg)
     trainer.fit(model, train_loader, valid_loader, ckpt_path=ckpt)
 

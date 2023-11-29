@@ -4,3 +4,4 @@ defaults:
   - adapter: mlp
 
 prefix_length: 10
+lr: 2e-5

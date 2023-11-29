@@ -8,6 +8,8 @@ import wandb
 from torch import nn
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
+from transformer import TransformerMapper
+
 
 class MLP(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -30,20 +32,38 @@ def freeze(module):
 
 
 class ClipCap(L.LightningModule):
+    def get_projector(self, cfg) -> nn.Module:
+        if cfg.adapter.type == "mlp":
+            return MLP(
+                (
+                    cfg.vision_model.dim,
+                    (cfg.language_model.dim * cfg.prefix_length) // 2,
+                    cfg.language_model.dim * cfg.prefix_length,
+                )
+            )
+        elif cfg.adapter.type == "transformer":
+            return TransformerMapper(
+                cfg.vision_model.dim,
+                cfg.language_model.dim,
+                cfg.prefix_length,
+                cfg.adapter.clip_length,
+                cfg.adapter.num_layers,
+            )
+        else:
+            raise ValueError(f"Unknown architecture {cfg.architecture}")
+
     def __init__(self, cfg) -> None:
         super().__init__()
+        self.lr = cfg.lr
         self.save_hyperparameters()
         self.vision_model, _ = clip.load(cfg.vision_model.name)
         freeze(self.vision_model)
-        self.language_model = freeze(AutoModelForCausalLM.from_pretrained(cfg.language_model.name))
-        self.tokenizer = AutoTokenizer.from_pretrained(cfg.language_model.name)
-        self.projector = MLP(
-            (
-                cfg.vision_model.dim,
-                (cfg.language_model.dim * cfg.prefix_length) // 2,
-                cfg.language_model.dim * cfg.prefix_length,
-            )
+        self.language_model = freeze(
+            AutoModelForCausalLM.from_pretrained(cfg.language_model.name)
         )
+        self.tokenizer = AutoTokenizer.from_pretrained(cfg.language_model.name)
+
+        self.projector = self.get_projector(cfg)
         self.prefix_length = cfg.prefix_length
         self.rouge = evaluate.load("rouge")
 
@@ -54,7 +74,8 @@ class ClipCap(L.LightningModule):
         caption_emb = self.language_model.get_input_embeddings()(tokens.input_ids)
         total_emb = torch.cat((out_mlp, caption_emb), dim=1)
         labels = torch.cat(
-            (torch.full((batch_size, self.prefix_length), -100), tokens.input_ids), dim=1
+            (torch.full((batch_size, self.prefix_length), -100), tokens.input_ids),
+            dim=1,
         )
         return self.language_model(inputs_embeds=total_emb, labels=labels)
 
@@ -105,5 +126,5 @@ class ClipCap(L.LightningModule):
         return result.loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.projector.parameters(), lr=2e-5)
+        optimizer = torch.optim.AdamW(self.projector.parameters(), lr=self.lr)
         return optimizer

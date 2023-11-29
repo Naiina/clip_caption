@@ -1,0 +1,3 @@
+type: transformer
+clip_length: 10
+num_layers: 8
