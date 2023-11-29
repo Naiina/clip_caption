@@ -1,0 +1,3 @@
+type: mlp
+hl1_dim: 64
+hl2_dim: 32

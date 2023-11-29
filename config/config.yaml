@@ -1,0 +1,12 @@
+defaults:
+  - clipcap: default
+  - data: coco
+  - _self_
+experiment_name: ${oc.env:EXPERIMENT_NAME}
+project_name: clipcap
+language: en
+epochs: 10
+batch_size: 4
+lr: 2e-5
+
+
