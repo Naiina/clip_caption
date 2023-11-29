@@ -1,7 +1,7 @@
 import json
 
 import torch
-from skimage import io
+from PIL import Image
 from pathlib import Path
 from torch.utils.data import Dataset
 from tqdm import tqdm
@@ -42,7 +42,7 @@ class COCODataset(Dataset):
             / f"{self.split}2014"
             / f"COCO_{self.split}2014_{img_id:012d}.jpg"
         )
-        img = io.imread(path)
+        img = Image.open(path)
         if self.transform is not None:
             img = self.transform(img)
-        return img, caption
+        return img, caption['caption']

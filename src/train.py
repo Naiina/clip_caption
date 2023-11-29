@@ -1,5 +1,6 @@
 from typing import Tuple
 
+import clip
 import hydra
 import lightning as L
 import torch
@@ -15,8 +16,9 @@ from utils import download_checkpoint
 
 
 def get_splits(cfg) -> Tuple[DataLoader, DataLoader, DataLoader]:
-    train_set = COCODataset(cfg.data_dir, "train")
-    valid_set = COCODataset(cfg.data_dir, "val")
+    _, preprocess_vis = clip.load(cfg.clipcap.vision_model.name)
+    train_set = COCODataset(cfg.data.data_dir, "train", transform=preprocess_vis)
+    valid_set = COCODataset(cfg.data.data_dir, "val", transform=preprocess_vis)
     train_loader = DataLoader(data.Subset(train_set, torch.arange(1000)), batch_size=4, num_workers=4)
     valid_loader = DataLoader(data.Subset(valid_set, torch.arange(1000)), batch_size=4, num_workers=4)
     test_loader = DataLoader(valid_set, num_workers=4)
@@ -36,7 +38,7 @@ def main(cfg: DictConfig) -> None:
     logger.watch(model)
 
     trainer = L.Trainer(max_epochs=5, logger=logger)
-    train_loader, valid_loader, test_loader = get_splits(cfg.data)
+    train_loader, valid_loader, test_loader = get_splits(cfg)
     trainer.fit(model, train_loader, valid_loader, ckpt_path=ckpt)
 
 if __name__ == "__main__":
