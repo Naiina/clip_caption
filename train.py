@@ -9,8 +9,7 @@ from tqdm import tqdm
 import os
 import pickle
 import sys
-import argparse
-import json
+import argparse import json
 from typing import Tuple, Optional, Union
 
 
@@ -37,7 +36,7 @@ class ClipCocoDataset(Dataset):
         tokens = self.captions_tokens[item]
         padding = self.max_seq_len - tokens.shape[0]
         if padding > 0:
-            tokens = torch.cat((tokens, torch.zeros(padding, dtype=torch.int64) - 1))
+            tokens = torch.cat((tokens, torch.full((padding,), self.padding_id, dtype=torch.int64) - 1))
             self.captions_tokens[item] = tokens
         elif padding < 0:
             tokens = tokens[:self.max_seq_len]
@@ -71,6 +70,10 @@ class ClipCocoDataset(Dataset):
         captions_raw = all_data["captions"]
         self.image_ids = [caption["image_id"] for caption in captions_raw]
         self.captions = [caption['caption'] for caption in captions_raw]
+        if "bloom" in model_name:
+            self.padding_id = 3
+        else:
+            self.padding_id = 0
         if os.path.isfile(f"{data_path[:-4]}_tokens.pkl"):
             with open(f"{data_path[:-4]}_tokens.pkl", 'rb') as f:
                 self.captions_tokens, self.caption2embedding, self.max_seq_len = pickle.load(f)
