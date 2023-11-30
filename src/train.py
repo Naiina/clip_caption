@@ -19,9 +19,9 @@ def get_splits(cfg) -> Tuple[DataLoader, DataLoader, DataLoader]:
     _, preprocess_vis = clip.load(cfg.clipcap.vision_model.name)
     train_set = COCODataset(cfg.data.data_dir, "train", transform=preprocess_vis)
     valid_set = COCODataset(cfg.data.data_dir, "val", transform=preprocess_vis)
-    train_loader = DataLoader(data.Subset(train_set, torch.arange(1000)), batch_size=4, num_workers=4)
-    valid_loader = DataLoader(data.Subset(valid_set, torch.arange(1000)), batch_size=4, num_workers=4)
-    test_loader = DataLoader(valid_set, num_workers=4)
+    train_loader = DataLoader(train_set, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
+    valid_loader = DataLoader(valid_set, batch_size=cfg.batch_size, num_workers=cfg.num_workers)
+    test_loader = DataLoader(valid_set, num_workers=cfg.num_workers)
     return train_loader, valid_loader, test_loader
 
 

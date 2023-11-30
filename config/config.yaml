@@ -8,5 +8,6 @@ language: en
 epochs: 10
 batch_size: 4
 seed: 42
+num_workers: 6
 
 
