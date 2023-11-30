@@ -29,6 +29,8 @@ class COCODataset(Dataset):
             if path.is_file():
                 data.append(cap)
         return data
+    def __len__(self):
+        return len(self.captions)
 
     def __getitem__(self, idx):
         caption = self.captions[idx]
@@ -46,3 +48,4 @@ class COCODataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
         return img, caption['caption']
+

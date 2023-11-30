@@ -4,6 +4,7 @@ from pathlib import Path
 
 import wandb
 from huggingface_hub import create_repo, hf_hub_download, login
+from lightning.pytorch import Callback
 
 
 def get_or_create_repo(cfg) -> str:
@@ -15,6 +16,33 @@ def get_or_create_repo(cfg) -> str:
     repo_url = create_repo(repo_path, repo_type="model", exist_ok=True)
     print(repo_url)
     return repo_url
+
+
+class ImageCaptionLogger(Callback):
+    def __init__(self, val_samples, num_samples=32):
+        super().__init__()
+        self.val_imgs, self.val_caps = val_samples
+        self.val_imgs = self.val_imgs[:num_samples]
+        self.val_caps = self.val_caps[:num_samples]
+
+    def on_train_start(self, trainer, pl_module):
+        val_imgs = self.val_imgs.to(device=pl_module.device)
+        val_toks = pl_module.tokenizer(
+            self.val_caps, return_tensors="pt", padding=True, truncation=True
+        )
+        val_toks = val_toks.to(device=pl_module.device)
+        outputs = pl_module(val_imgs, val_toks)
+        preds = outputs.logits.argmax(-1)
+        preds = pl_module.tokenizer.batch_decode(preds)
+        trainer.logger.experiment.log(
+            {
+                "examples": [
+                    wandb.Image(img, caption=f"Pred: {pred}, Target: {target}")
+                    for img, pred, target in zip(val_imgs, preds, self.val_caps)
+                ],
+                "global_step": trainer.global_step,
+            }
+        )
 
 
 def download_checkpoint_hf(repo_url: str, cfg):

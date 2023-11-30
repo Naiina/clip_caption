@@ -12,7 +12,7 @@ from torchvision import transforms
 
 from model import ClipCap
 from dataset import COCODataset
-from utils import download_checkpoint
+from utils import download_checkpoint, ImageCaptionLogger
 
 
 def get_splits(cfg) -> Tuple[DataLoader, DataLoader, DataLoader]:
@@ -39,8 +39,10 @@ def main(cfg: DictConfig) -> None:
     logger.watch(model)
 
     seed_everything(cfg.seed, workers=True)
-    trainer = Trainer(max_epochs=5, logger=logger, deterministic=True)
     train_loader, valid_loader, test_loader = get_splits(cfg)
+    sample = next(iter(valid_loader))
+    trainer = Trainer(max_epochs=cfg.epochs, logger=logger, deterministic=True, callbacks=[ImageCaptionLogger(sample)])
+
     trainer.fit(model, train_loader, valid_loader, ckpt_path=ckpt)
 
 if __name__ == "__main__":
