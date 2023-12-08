@@ -25,7 +25,7 @@ class ImageCaptionLogger(Callback):
         self.val_imgs = self.val_imgs[:num_samples]
         self.val_caps = self.val_caps[:num_samples]
 
-    def on_train_start(self, trainer, pl_module):
+    def on_validation_start(self, trainer, pl_module):
         val_imgs = self.val_imgs.to(device=pl_module.device)
         val_toks = pl_module.tokenizer(
             self.val_caps, return_tensors="pt", padding=True, truncation=True

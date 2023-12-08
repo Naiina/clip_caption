@@ -62,6 +62,9 @@ class ClipCap(L.LightningModule):
             AutoModelForCausalLM.from_pretrained(cfg.language_model.name)
         )
         self.tokenizer = AutoTokenizer.from_pretrained(cfg.language_model.name)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.padding_side = "right"
 
         self.projector = self.get_projector(cfg)
         self.prefix_length = cfg.prefix_length
@@ -69,15 +72,21 @@ class ClipCap(L.LightningModule):
 
     def forward(self, img, tokens):
         batch_size = img.shape[0]
-        out_clip = self.vision_model.encode_image(img)
-        out_mlp = self.projector(out_clip).view(batch_size, self.prefix_length, -1)
-        caption_emb = self.language_model.get_input_embeddings()(tokens.input_ids)
-        total_emb = torch.cat((out_mlp, caption_emb), dim=1)
-        labels = torch.cat(
-            (torch.full((batch_size, self.prefix_length), -100), tokens.input_ids),
-            dim=1,
-        )
-        return self.language_model(inputs_embeds=total_emb, labels=labels)
+        with torch.autocast(device_type="cuda"):
+            out_clip = self.vision_model.encode_image(img)
+            out_mlp = self.projector(out_clip).view(batch_size, self.prefix_length, -1)
+            caption_emb = self.language_model.get_input_embeddings()(tokens.input_ids)
+            mask = tokens.attention_mask.type_as(tokens.input_ids)
+            total_emb = torch.cat((out_mlp, caption_emb), dim=1)
+            # replace a value in a tensor
+            labels = torch.where(mask == 0, -100, tokens.input_ids).type_as(tokens.input_ids)
+            labels = torch.cat(
+                (torch.full((batch_size, self.prefix_length), -100).type_as(tokens.input_ids), labels),
+                dim=1,
+            )
+            
+            mask = torch.cat((torch.ones((batch_size, self.prefix_length)).type_as(mask), mask), dim=1)
+            return self.language_model(inputs_embeds=total_emb, labels=labels, attention_mask=mask)
 
     def training_step(self, batch, batch_idx):
         if self.global_step == 0:
@@ -90,24 +99,27 @@ class ClipCap(L.LightningModule):
         tokens = self.tokenizer(
             caption, return_tensors="pt", padding=True, truncation=True
         )
+        tokens.input_ids = tokens.input_ids.to(img.device)
         result = self(img, tokens)
         self.log("train_loss", result.loss)
         return result.loss
 
     def validation_step(self, batch, batch_idx):
         img, caption = batch
-        print(caption)
-        print(type(caption))
         tokens = self.tokenizer(
             caption, return_tensors="pt", padding=True, truncation=True
         )
+
+        tokens.input_ids = tokens.input_ids.to(img.device)
+        tokens.attention_mask = tokens.attention_mask.to(img.device)
         result = self(img, tokens)
         self.log("val_loss", result.loss)
-        preds = torch.argmax(result.logits, dim=2)
-        preds = self.tokenizer.batch_decode(preds)
-        refs = self.tokenizer.batch_decode(tokens.input_ids)
+        preds = torch.argmax(result.logits, dim=2)[:, self.prefix_length:]
+        preds = self.tokenizer.batch_decode(preds, skip_special_tokens=True)
+        refs = self.tokenizer.batch_decode(tokens.input_ids, skip_special_tokens=True)
         rouge = self.rouge.compute(predictions=preds, references=refs)
-        self.log("val_accuracy", rouge["rouge2"], on_epoch=True)
+        self.log("val_accuracy", rouge["rougeL"], on_epoch=True)
+        self.log("val_loss", result.loss)
         return result.loss
 
     def test_step(self, batch, batch_idx):
@@ -115,14 +127,15 @@ class ClipCap(L.LightningModule):
         tokens = self.tokenizer(
             caption, return_tensors="pt", padding=True, truncation=True
         )
+        tokens.input_ids = tokens.input_ids.to(img.device)
+
         result = self(img, tokens)
-        self.log("val_loss", result.loss)
         preds = torch.argmax(result.logits, dim=2)
         preds = self.tokenizer.batch_decode(preds)
         refs = self.tokenizer.batch_decode(tokens.input_ids)
         rouge = self.rouge.compute(predictions=preds, references=refs)
-        self.log("val_accuracy", rouge["rouge2"], on_epoch=True)
-        self.log("val_loss", result.loss)
+        self.log("test_accuracy", rouge["rougeL"], on_epoch=True)
+        self.log("test_loss", result.loss)
         return result.loss
 
     def configure_optimizers(self):

@@ -3,4 +3,5 @@ outputs/
 .idea/
 .DS_Store
 scripts/slurm
+slurm-*
 

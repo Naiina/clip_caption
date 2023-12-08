@@ -41,7 +41,7 @@ def main(cfg: DictConfig) -> None:
     seed_everything(cfg.seed, workers=True)
     train_loader, valid_loader, test_loader = get_splits(cfg)
     sample = next(iter(valid_loader))
-    trainer = Trainer(max_epochs=cfg.epochs, logger=logger, deterministic=True, callbacks=[ImageCaptionLogger(sample)])
+    trainer = Trainer(max_epochs=cfg.epochs, logger=logger, callbacks=[ImageCaptionLogger(sample)], precision='32-true')
 
     trainer.fit(model, train_loader, valid_loader, ckpt_path=ckpt)
 
