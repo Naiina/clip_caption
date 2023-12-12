@@ -1,7 +1,7 @@
 #from datasets import load_metric
 import json
 from tqdm import tqdm
-#import evaluate
+import evaluate
 
 from datasets import load_metric
 
@@ -10,14 +10,9 @@ from pycocoevalcap.eval import COCOEvalCap
 import pdb
 
 
-path = "coco_train_nina_modif_loss2/"
 
 
-
-
-
-
-def convert(l_pred, l_annot):
+def convert_to_dict(l_pred, l_annot):
     d_pred = {}
     d_annot = {}
     for elem in tqdm(l_pred):
@@ -35,13 +30,6 @@ def convert(l_pred, l_annot):
 def keys_mismatch (d1, d2):
     k1 = d1.keys()
     k2 = d2.keys()
-    #for i,elem in enumerate(k1):
-    #    if i<10:
-    #        print(type(elem))
-    #for i,elem in enumerate(k2):
-    #    if i<10:
-    #        print(type(elem))
-        
     l_1 = [ k in d2 for k in k1]
     l_2 = [k in d1 for k in k2]
     print(l_1.count(False), l_2.count(False))
@@ -54,7 +42,7 @@ def print_some_capt(d1,d2):
         print(d1[elem])
         print(d2[elem])
 
-def convert_to_list_for_rouge (path,d_annot, d_pred):
+def convert_to_list_for_rouge (path,d_annot, d_pred,checkpoint):
     l_annot_r = []
     l_pred_r = []
     annot_keys = d_annot.keys()
@@ -64,11 +52,12 @@ def convert_to_list_for_rouge (path,d_annot, d_pred):
             l_pred_r.append(d_pred[k])
     
     
-    with open (path+"l_pred_r_"+val_or_train+"_"+checkpoint+".json", "w") as f:
-        json.dump(l_pred_r,f)
+    with open (path+"l_pred_r_val_"+checkpoint+".json", "w",encoding='utf8') as f:
+        json.dump(l_pred_r,f, ensure_ascii=False)
 
-    with open(path+"l_annot_r_"+val_or_train+"_"+checkpoint+".json", 'w') as outfile:
-        json.dump(l_annot_r, outfile)
+    with open(path+"l_annot_r_val_"+checkpoint+".json", 'w',encoding='utf8') as outfile:
+        json.dump(l_annot_r, outfile, ensure_ascii=False)
+    return l_annot_r, l_pred_r
 
 def convert_annot_to_spice_format(annot_file,out_path):
     with open(annot_file, "r") as f:
@@ -86,38 +75,59 @@ def convert_annot_to_spice_format(annot_file,out_path):
 
 
 
-def compute_score(predict_folder,predict_file,metric,train_or_val):
+def compute_score(path,predict_file,metric,dataset,checkpoint):
     
-    
-        
-    #results_file = '../pycocoevalcap/example/captions_val2014_fakecap_results.json'
-    predicted_capt = predict_folder + predict_file
+    predict_path = path+predict_file
+    if dataset == "coco":
+        annot_path = "data/coco/annotations/"
+        annot_file = annot_path+"annotation_val_propre.json"
+    if dataset == "wit":
+        annot_path = "data/wit/annotations/"
+        annot_file = annot_path+"val_caption.json"
+    if dataset == "wit_en":
+        annot_path = "data/wit_en/annotations/"
+        annot_file = annot_path+"val_caption.json"
+    with open(predict_path, "r") as f:
+        l_predict = json.load(f)
+    with open(annot_file, "r") as f:
+        l_annot = json.load(f)
 
-    annot_path = "data/coco/annotations/"
-    annot_file = annot_path+"annotation_val_propre.json"
-    annot_spice_file = convert_annot_to_spice_format(annot_file,annot_path)
+    if metric == "spice":
+        annot_spice_file = convert_annot_to_spice_format(annot_file,annot_path)
 
-    coco = COCO(annot_spice_file)
-    coco_result = coco.loadRes(predicted_capt)
+        coco = COCO(annot_spice_file)
+        coco_result = coco.loadRes(predict_path)
 
-    # create coco_eval object by taking coco and coco_result
-    coco_eval = COCOEvalCap(coco, coco_result)
+        # create coco_eval object by taking coco and coco_result
+        coco_eval = COCOEvalCap(coco, coco_result)
+        coco_eval.evaluate()
 
-    # evaluate on a subset of images by setting
-    # coco_eval.params['image_id'] = coco_result.getImgIds()
-    # please remove this line when evaluating the full validation set
-    #coco_eval.params['image_id'] = coco_result.getImgIds()
+        # print output evaluation scores
+        for metric, score in coco_eval.eval.items():
+            print(f'{metric}: {score:.3f}')
+    if metric == "rouge": 
+        rouge = evaluate.load('rouge')
+        d_pred, d_annot = convert_to_dict(l_predict, l_annot)
+        #print(d_pred)
+        l_annot_r, l_pred_r = convert_to_list_for_rouge (path,d_annot, d_pred,checkpoint)
+        results = rouge.compute(predictions=l_pred_r, references=l_annot_r)
+        print(results)
 
-    # evaluate results
-    # SPICE will take a few minutes the first time, but speeds up due to caching
-    coco_eval.evaluate()
+parser = argparse.ArgumentParser()
+parser.add_argument('--path')
+parser.add_argument('--checkpoint')
+parser.add_argument('--dataset_name')
+parser.add_argument('--metric')
 
-    # print output evaluation scores
-    for metric, score in coco_eval.eval.items():
-        print(f'{metric}: {score:.3f}')
+args = parser.parse_args()
 
+checkpoint = args.checkpoint
+path = args.path
+predicted_capt = path+"predicted_captions_val_"+checkpoint+".json"
+metric = args.metric
+dataset_name = args.dataset_name
 
-compute_score(path,"predicted_captions_val_002.json","spice","val")
+compute_score(path,predicted_capt,metric,dataset_name,checkpoint)
 
 
 
