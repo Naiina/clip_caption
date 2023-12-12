@@ -9,8 +9,11 @@ from tqdm import tqdm
 import os
 import pickle
 import sys
-import argparse import json
+import argparse 
+import json
 from typing import Tuple, Optional, Union
+import numpy as np
+import matplotlib.pyplot as plt
 
 
 
@@ -74,20 +77,21 @@ class ClipCocoDataset(Dataset):
             self.padding_id = 3
         else:
             self.padding_id = 0
-        if os.path.isfile(f"{data_path[:-4]}_tokens.pkl"):
-            with open(f"{data_path[:-4]}_tokens.pkl", 'rb') as f:
-                self.captions_tokens, self.caption2embedding, self.max_seq_len = pickle.load(f)
-        else:
-            self.captions_tokens = []
-            self.caption2embedding = []
-            max_seq_len = 0
-            for caption in captions_raw:
-                self.captions_tokens.append(torch.tensor(self.tokenizer.encode(caption['caption']), dtype=torch.int64))
-                self.caption2embedding.append(caption["clip_embedding"])
-                max_seq_len = max(max_seq_len, self.captions_tokens[-1].shape[0])
-            
-            with open(f"{data_path[:-4]}_tokens.pkl", 'wb') as f:
-                pickle.dump([self.captions_tokens, self.caption2embedding, max_seq_len], f)
+
+        #if os.path.isfile(f"{data_path[:-4]}_tokens.pkl"):
+        #    with open(f"{data_path[:-4]}_tokens.pkl", 'rb') as f:
+        #        self.captions_tokens, self.caption2embedding, self.max_seq_len = pickle.load(f)
+        #else:
+        self.captions_tokens = []
+        self.caption2embedding = []
+        max_seq_len = 0
+        for caption in captions_raw:
+            self.captions_tokens.append(torch.tensor(self.tokenizer.encode(caption['caption']), dtype=torch.int64))
+            self.caption2embedding.append(caption["clip_embedding"])
+            max_seq_len = max(max_seq_len, self.captions_tokens[-1].shape[0])
+        
+        with open(f"{data_path[:-4]}_tokens.pkl", 'wb') as f:
+            pickle.dump([self.captions_tokens, self.caption2embedding, max_seq_len], f)
             
         all_len = torch.tensor([len(self.captions_tokens[i]) for i in range(len(self))]).float()
         self.max_seq_len = min(int(all_len.mean() + all_len.std() * 10), int(all_len.max())) #16 on first 10 data
@@ -339,7 +343,7 @@ def load_model(model_name, config_path: str, epoch_or_latest: Union[str, int] = 
 
 
 def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
-          lr: float = 2e-5, warmup_steps: int = 5000, output_dir: str = ".", output_prefix: str = ""):
+          lr: float = 5e-6, warmup_steps: int = 5000, output_dir: str = ".", output_prefix: str = ""):
     
     #device = torch.device('cuda:0')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -356,15 +360,16 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
         optimizer, num_warmup_steps=warmup_steps, num_training_steps=epochs * len(train_dataloader)
     )
     # save_config(args)
-    for epoch in range(1):
-    #for epoch in range(nb_epochs):
+    #for epoch in range(1):
+    l_mean_loss = []
+    for epoch in range(nb_epochs):
         print(f">>> Training epoch {epoch}")
         sys.stdout.flush()
         progress = tqdm(total=len(train_dataloader), desc=output_prefix)
         l_loss = []
         for idx, (tokens, mask, prefix) in enumerate(train_dataloader):
-            if idx > 10:
-                exit()
+            #if idx > 10:
+            #    exit()
             # tokens: one int per word in the caption + zero padd (from bloom tokeniser)
             # mask: ones(prefix_lenght)+ ones(caption len) + zero padd
             # clip prefix of size batch_size * 512 (clip output)
@@ -376,14 +381,16 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             
             
             loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=-100)
-            l_loss.append(loss)
-            print(loss)
+            
+            #print(loss)
             loss.backward()
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
             progress.set_postfix({"loss": loss.item()})
             progress.update()
+            int_loss = loss.cpu().detach().numpy()
+            l_loss.append(int_loss)
             #print(idx)
             if (idx + 1) % 10000 == 0:
                 torch.save(
@@ -393,6 +400,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             
         
         progress.close()
+        l_mean_loss.append(np.mean(l_loss))
         if epoch % args.save_every == 0 or epoch == epochs - 1:
             torch.save(
                 model.state_dict(),
@@ -400,13 +408,17 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             )
             #with open(f"loss_{epoch:03d}.pkl", 'wb') as f:
             #    pickle.dump(l_loss, f)
-        
+    plt.plot(l_mean_loss)
+    plt.title("mean loss on train set" )
+    plt.xlabel("epoch")
+    plt.savefig(output_dir+"loss_over_epoch_train.png")
+
     return model
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', default='./data/oscar_split_ViT-B_32_train.pkl')
+    parser.add_argument('--data', default='./data/oscar_split_train.pkl')
     parser.add_argument('--out_dir', default='./checkpoints')
     parser.add_argument('--prefix', default='coco_prefix', help='prefix for saved filenames')
     parser.add_argument('--epochs', type=int, default=10)
@@ -415,7 +427,6 @@ def main():
     parser.add_argument('--prefix_length', type=int, default=10)
     parser.add_argument('--prefix_length_clip', type=int, default=10)
     parser.add_argument('--bs', type=int, default=40)
-    parser.add_argument('--nina_modif', type=bool, default=False)
     #parser.add_argument('--bs', type=int, default=2)
     parser.add_argument('--only_prefix', dest='only_prefix', action='store_true')
     parser.add_argument('--mapping_type', type=str, default='mlp', help='mlp/transformer')
@@ -432,17 +443,10 @@ def main():
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     
-    #if args.only_prefix:
-    if True:
-        model = ClipCaptionPrefix(prefix_length, model_name, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
+    
+    model = ClipCaptionPrefix(prefix_length, model_name, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
                                   num_layers=args.num_layers, mapping_type=args.mapping_type)
-        print("Train only prefix")
-    #else:
-    #    model = ClipCaptionModel(prefix_length, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
-    #                              num_layers=args.num_layers, mapping_type=args.mapping_type)
-    #    print("Train both prefix and GPT")
-    #    sys.stdout.flush()
-    #model = load_model("coco_train/coco_prefix_latest.pt")
+    
     train(nb_epochs, dataset, model, args, output_dir=args.out_dir, output_prefix=args.prefix)
 
 
