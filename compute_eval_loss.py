@@ -18,21 +18,41 @@ from PIL import Image
 import pickle
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+
+
+import io
+from statistics import mean 
+import numpy as np
 
 CPU = torch.device("cpu")
-checkpoint_dir = "coco_train_nina_modif_val"
 
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--path')
+parser.add_argument('--nb_epochs')
+parser.add_argument('--dataset')
+
+args = parser.parse_args()
+nb_epochs = int(args.nb_epochs)
+#print(nb_epochs)
+checkpoint_dir = args.path
+dataset_name = args.dataset
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 with torch.no_grad():
     model = ClipCaptionPrefix(prefix_length =10, clip_length=10,
-                                    num_layers=8, mapping_type="transformer")
-    data = './coco_train_40pref_lenght/oscar_split_ViT-B_32_val.pkl'
+                                    num_layers=8, mapping_type="transformer", model_name='bigscience/bloom-560m')
+    
+    data = './data/'+dataset_name+'/oscar_split_val.pkl'
+    
 
-    dataset = ClipCocoDataset(data, 10, normalize_prefix='normalize_prefix')
+
+    dataset = ClipCocoDataset(data, 10, normalize_prefix='normalize_prefix', model_name='bigscience/bloom-560m')
     val_dataloader = DataLoader(dataset, batch_size=40, shuffle=False, drop_last=False)
 
 
-    for epoch in range(10):
+    for epoch in range(nb_epochs):
 
         weights_path = checkpoint_dir + "/coco_prefix-00"+str(epoch)+".pt"
         model.load_state_dict(torch.load(weights_path, map_location=CPU))
@@ -57,3 +77,34 @@ with torch.no_grad():
             
         with open(f"/exports/eddie/scratch/s2523033/CLIP_prefix_caption/"+checkpoint_dir+"/loss_"+str(epoch)+"_val.pkl", 'wb') as f:
             pickle.dump(l_loss, f)
+
+
+CPU = torch.device("cpu")
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+
+
+class CPU_Unpickler(pickle.Unpickler):
+    def find_class(self, module, name):
+        if module == 'torch.storage' and name == '_load_from_bytes':
+            return lambda b: torch.load(io.BytesIO(b), map_location='cpu')
+        else:
+            return super().find_class(module, name)
+
+
+
+l_mean = []
+for i in range(nb_epochs):
+    with open("./"+args.path+"/loss_"+str(i)+"_val.pkl", 'rb') as f:
+        tensor_loss = CPU_Unpickler(f).load()
+
+    loss = [elem.numpy() for elem in tensor_loss]
+    l_mean.append(np.mean(loss))
+    print(l_mean)
+
+
+    
+plt.plot(l_mean)
+plt.title("mean loss on val set" )
+plt.xlabel("epoch")
+plt.savefig(args.path+"/loss_over_epoch_val.png")
