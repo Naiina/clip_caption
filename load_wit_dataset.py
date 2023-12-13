@@ -1,5 +1,6 @@
 
 
+
 from datasets import load_dataset
 from torchvision import transforms
 from PIL import Image  
@@ -66,11 +67,7 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
     #dict_keys(['image', 'image_url', 'embedding', 'metadata_url', 'original_height', 'original_width', 'mime_type', 'caption_attribution_description', 'wit_features'])
 
 
-#train_or_val = "val"
-dataset = "wit_en"
-#dataset = "wit_small"
 
-target_lang ='en'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--out_path')
@@ -92,3 +89,4 @@ im_folder_train = "data/"+dataset+"/train/"
 im_folder_val = "data/"+dataset+"/val/"
 
 generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_size,im_folder_train, im_folder_val, caption_file_train, caption_file_val)
+
