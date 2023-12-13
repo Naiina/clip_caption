@@ -8,20 +8,19 @@ import os
 from tqdm import tqdm
 import argparse
 
-torch.manual_seed(0)
 
-def main(clip_model_type: str,train_val = "train"):
+
+def main(clip_model_type: str,dataset, train_or_val = "train"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cuda:0')
     clip_model_name = clip_model_type.replace('/', '_')
-    if train_val == "train":
-        out_path = f"./data/coco/oscar_split_{clip_model_name}_train.pkl"
-        with open('./data/coco/annotations/train_caption.json', 'r') as f:
-            data = json.load(f)
-    else:
-        out_path = f"./coco_train/oscar_split_{clip_model_name}_val.pkl"
-        with open('./coco_train/annotation_val_propre.json', 'r') as f:
-            data = json.load(f)
+   
+    out_path = f"./data/"+dataset+"/oscar_split_"+train_or_val+".pkl"
+        
+    with open('./data/'+dataset+'/annotations/'+train_or_val+'_caption.json', 'r') as f:
+        data = json.load(f)
+    
+
     clip_model, preprocess = clip.load(clip_model_type, device=device, jit=False)
     
     print("%0d captions loaded from json " % len(data))
@@ -31,9 +30,11 @@ def main(clip_model_type: str,train_val = "train"):
     #for i in tqdm(range(100)):
         d = data[i]
         img_id = d["image_id"]
-        filename = f"./data/coco/train2014/COCO_train2014_{int(img_id):012d}.jpg"
-        if not os.path.isfile(filename):
-            filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
+        if dataset == "coco":
+            filename = f"./data/coco/"+train_or_val+"/COCO_"+train_or_val+"2014_{int(img_id):012d}.jpg"
+        else:
+            filename = "./data/"+dataset+"/"+train_or_val+"/"+img_id+".jpg"
+        
         image = io.imread(filename)
         image = preprocess(Image.fromarray(image)).unsqueeze(0).to(device) # tensors size [1, 3, 224, 224]
         #print(image.size())
@@ -61,5 +62,9 @@ def main(clip_model_type: str,train_val = "train"):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32'))
+    parser.add_argument('--dataset')
+    parser.add_argument('--train_or_val', choices=('train', 'val'))
     args = parser.parse_args()
-    exit(main(args.clip_model_type, "val"))
+    dataset = args.dataset
+    train_or_val = args.train_or_val
+    exit(main(args.clip_model_type, dataset, train_or_val))
