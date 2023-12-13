@@ -52,10 +52,10 @@ def convert_to_list_for_rouge (path,d_annot, d_pred,checkpoint):
             l_pred_r.append(d_pred[k])
     
     
-    with open (path+"l_pred_r_val_"+checkpoint+".json", "w",encoding='utf8') as f:
+    with open (path+"/l_pred_r_val_"+checkpoint+".json", "w",encoding='utf8') as f:
         json.dump(l_pred_r,f, ensure_ascii=False)
 
-    with open(path+"l_annot_r_val_"+checkpoint+".json", 'w',encoding='utf8') as outfile:
+    with open(path+"/l_annot_r_val_"+checkpoint+".json", 'w',encoding='utf8') as outfile:
         json.dump(l_annot_r, outfile, ensure_ascii=False)
     return l_annot_r, l_pred_r
 
@@ -78,15 +78,9 @@ def convert_annot_to_spice_format(annot_file,out_path):
 def compute_score(path,predict_file,metric,dataset,checkpoint):
     
     predict_path = path+predict_file
-    if dataset == "coco":
-        annot_path = "data/coco/annotations/"
-        annot_file = annot_path+"annotation_val_propre.json"
-    if dataset == "wit":
-        annot_path = "data/wit/annotations/"
-        annot_file = annot_path+"val_caption.json"
-    if dataset == "wit_en":
-        annot_path = "data/wit_en/annotations/"
-        annot_file = annot_path+"val_caption.json"
+    annot_path = "data/"+dataset+"/annotations/"
+    annot_file = annot_path+"val_caption.json"
+    
     with open(predict_path, "r") as f:
         l_predict = json.load(f)
     with open(annot_file, "r") as f:
@@ -123,7 +117,7 @@ args = parser.parse_args()
 
 checkpoint = args.checkpoint
 path = args.path
-predicted_capt = path+"predicted_captions_val_"+checkpoint+".json"
+predicted_capt = path+"/predicted_captions_val_"+checkpoint+".json"
 metric = args.metric
 dataset_name = args.dataset_name
 

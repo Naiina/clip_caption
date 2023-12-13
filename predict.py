@@ -195,16 +195,16 @@ def main(use_beam_search = False):
     parser.add_argument('--prefix_length_clip', type=int, default=10)
     parser.add_argument('--bs', type=int, default=40)
     #parser.add_argument('--bs', type=int, default=2)
-    parser.add_argument('--only_prefix', dest='only_prefix', action='store_true')
-    parser.add_argument('--mapping_type', type=str, default='mlp', help='mlp/transformer')
+    parser.add_argument('--only_prefix', default='only_prefix', action='store_true')
+    parser.add_argument('--mapping_type', type=str, default='transformer', help='mlp/transformer')
     #parser.add_argument('--num_layers', type=int, default=2)
     parser.add_argument('--num_layers', type=int, default=8)
     parser.add_argument('--is_rn', dest='is_rn', action='store_true')
     parser.add_argument('--normalize_prefix', dest='normalize_prefix', action='store_true')
-    parser.add_argument("--coco_train_path")
+    parser.add_argument("--train_path")
     parser.add_argument("--checkpoint", default = "latest")
     parser.add_argument("--model_name", default = "bloom")
-    parser.add_argument("--dataset", default = "wit")
+    parser.add_argument("--dataset")
     args = parser.parse_args()
     model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
     tokenizer =  AutoTokenizer.from_pretrained(model_name)
@@ -220,9 +220,9 @@ def main(use_beam_search = False):
         
     
     if args.checkpoint == "latest":
-        weights_path = (args.coco_train_path+"coco_prefix_"+args.checkpoint+".pt")
+        weights_path = (args.train_path+"/coco_prefix_"+args.checkpoint+".pt")
     else :
-        weights_path = (args.coco_train_path+"coco_prefix-"+args.checkpoint+".pt")
+        weights_path = (args.train_path+"/coco_prefix-"+args.checkpoint+".pt")
     model.load_state_dict(torch.load(weights_path, map_location=CPU))
     model = model.eval()
     model = model.to(device)

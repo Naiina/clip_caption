@@ -70,23 +70,22 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--out_path')
 parser.add_argument('--train_size', default = 83000)
 parser.add_argument('--val_size', default = 20000)
-parser.add_argument('--dataset_name')
+parser.add_argument('--outpath')
 parser.add_argument('--lang')
 
 args = parser.parse_args()
 
-dataset = args.dataset_name
+out_path = args.out_path
 train_set_size = args.train_size
 val_set_size = args.val_size
 target_lang = args.lang
 
-caption_file_train = "data/"+dataset+"/annotations/train_caption.json"
-caption_file_val = "data/"+dataset+"/annotations/val_caption.json"
-im_folder_train = "data/"+dataset+"/train/"
-im_folder_val = "data/"+dataset+"/val/"
+caption_file_train = "data/"+out_path+"/annotations/train_caption.json"
+caption_file_val = "data/"+out_path+"/annotations/val_caption.json"
+im_folder_train = "data/"+out_path+"/train/"
+im_folder_val = "data/"+out_path+"/val/"
 
 generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_size,im_folder_train, im_folder_val, caption_file_train, caption_file_val)
 
