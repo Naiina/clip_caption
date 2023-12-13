@@ -204,10 +204,12 @@ def main(use_beam_search = False):
     parser.add_argument("--coco_train_path")
     parser.add_argument("--checkpoint", default = "latest")
     parser.add_argument("--model_name", default = "bloom")
+    parser.add_argument("--dataset", default = "wit")
     args = parser.parse_args()
     model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
     tokenizer =  AutoTokenizer.from_pretrained(model_name)
     prefix_length = args.prefix_length
+    dataset_name = args.dataset
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
@@ -231,18 +233,19 @@ def main(use_beam_search = False):
     predicted_captions = []
 
     i = 0
-    if args.train_or_val == "val":
-        data_path = "data/coco/val2014/"
-    else:
-        data_path = "data/coco/train2014/"
+    data_path = "data/"+dataset_name+"/"+args.train_or_val+"/"
+    
     #print(data_path)
     #exit()
     for f in tqdm(listdir(data_path)):
         #d = data[elem]
         i = i+1
-        if i>10:
-            exit()
-        img_id = int(f[19:-4])
+        #if i>10:
+        #    exit()
+        if "wit" in dataset_name:
+            img_id = int(f[:-4])
+        if dataset_name == "coco":
+            img_id = int(f[19:-4])
         #filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
         image = io.imread(data_path+f)
         pil_image = PIL.Image.fromarray(image)
@@ -257,7 +260,7 @@ def main(use_beam_search = False):
         else:
             out = generate2(model, tokenizer, embed=prefix_embed)
         d = {"image_id": img_id, "caption": out}
-        print(out)
+        #print(d)
         predicted_captions.append(d)
         if i%10000 == 0:
             #with open('filename', 'w', encoding='utf8') as json_file:
@@ -272,34 +275,6 @@ def main(use_beam_search = False):
         outfile.write(json_object)
     
     
-
-#COCO_val2014_000000000042.jpg
-    
-def create_annotation_val_file():
-    
-    image_path = "data/coco/val2014"
-    caption_path = './data/coco/annotation2/captions_val2014.json'
-  
-    l_annotation = []
-    l_image = [int(f[19:-4]) for f in listdir(image_path)]
-    
-    with open(caption_path, 'r') as f:
-        data = json.load(f)
-    data_annot = data["annotations"]
-    
-
-    i = 0
-    for image_id in l_image:
-        i+=1
-        if i%10000 == 0:
-            print("%0d images" %i)
-        for elem in data_annot:
-            if int(elem["image_id"]) == image_id:
-                l_annotation.append(elem)
-    print(len(l_annotation))
-    json_object = json.dumps(l_annotation)
-    with open("annotation_val2.json", "w") as outfile:
-        outfile.write(json_object)
 
 
 if __name__ == '__main__':
