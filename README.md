@@ -13,7 +13,7 @@ Inference Notebook: <a href="https://colab.research.google.com/drive/1tuoAC5F4sC
 
 
 ## Description  
-We replaced GPT2 by Blomm to get a multilanguage captioning
+We replaced GPT2 by Bloom to get a multilanguage captioning network
 we used the WIT dataset 
 
 
