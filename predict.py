@@ -260,19 +260,19 @@ def main(use_beam_search = False):
         else:
             out = generate2(model, tokenizer, embed=prefix_embed)
         d = {"image_id": img_id, "caption": out}
-        #print(d)
+        print(d)
         predicted_captions.append(d)
         if i%10000 == 0:
             #with open('filename', 'w', encoding='utf8') as json_file:
             #    json.dump("ברי צקלה", json_file, ensure_ascii=False)
             #json_object = json.dumps(predicted_captions)
 
-            with open(args.coco_train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w", encoding = 'utf8') as outfile:
+            with open(args.train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w", encoding = 'utf8') as outfile:
                 json.dump(predicted_captions, outfile, ensure_ascii=False)
      
-    json_object = json.dumps(predicted_captions)
-    with open(args.coco_train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w") as outfile:
-        outfile.write(json_object)
+    #json_object = json.dumps(predicted_captions)
+    with open(args.train_path+"/predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w",encoding="utf8") as outfile:
+        json.dump(predicted_captions,outfile,ensure_ascii=False)
     
     
 

@@ -365,7 +365,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     for epoch in range(nb_epochs):
         print(f">>> Training epoch {epoch}")
         sys.stdout.flush()
-        progress = tqdm(total=len(train_dataloader), desc=output_prefix)
+        progress = tqdm(total=len(train_dataloader), desc="train_epoch"+str(epoch))
         l_loss = []
         for idx, (tokens, mask, prefix) in enumerate(train_dataloader):
             #if idx > 10:
@@ -411,7 +411,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     plt.plot(l_mean_loss)
     plt.title("mean loss on train set" )
     plt.xlabel("epoch")
-    plt.savefig(output_dir+"loss_over_epoch_train.png")
+    plt.savefig(output_dir+"/loss_over_epoch_train.png")
 
     return model
 

@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader
 import imghdr
 from tqdm import tqdm
 import argparse 
+import os
 
 transform = transforms.Compose([
     # you can add other transformations in this list
@@ -25,6 +26,9 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
     print("hey")
     b = True
     real_train_set_size = train_set_size
+    
+
+
     for idx, k in tqdm(enumerate(data)):
         
         #capt = k['caption_attribution_description'] #ref, filter langu
@@ -77,15 +81,19 @@ parser.add_argument('--lang')
 
 args = parser.parse_args()
 
-out_path = args.out_path
-train_set_size = args.train_size
-val_set_size = args.val_size
+out_path = args.outpath
+train_set_size = int(args.train_size)
+val_set_size = int(args.val_size)
 target_lang = args.lang
 
 caption_file_train = "data/"+out_path+"/annotations/train_caption.json"
 caption_file_val = "data/"+out_path+"/annotations/val_caption.json"
 im_folder_train = "data/"+out_path+"/train/"
 im_folder_val = "data/"+out_path+"/val/"
-
+if not os.path.exists("data/"+out_path):
+    os.mkdir("data/"+out_path)
+    os.mkdir("data/"+out_path+"/annotations")
+    os.mkdir(im_folder_train)
+    os.mkdir(im_folder_val)
 generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_size,im_folder_train, im_folder_val, caption_file_train, caption_file_val)
 
