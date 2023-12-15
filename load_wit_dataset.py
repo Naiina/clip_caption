@@ -11,6 +11,8 @@ import imghdr
 from tqdm import tqdm
 import argparse 
 import os
+from PIL import PngImagePlugin
+PngImagePlugin.MAX_TEXT_CHUNK = 10485760  # this is the current value
 
 transform = transforms.Compose([
     # you can add other transformations in this list
@@ -21,11 +23,13 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
 
     data = load_dataset("wikimedia/wit_base", split="train", streaming=True)
     i = 0
+    j = 0
     l_caption = []
     im_folder = im_folder_train
     print("hey")
     b = True
     real_train_set_size = train_set_size
+    save_folder = caption_file_train
     
 
 
@@ -47,22 +51,28 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
                 image = k['image']
                 if 'Jpeg' in str(type(image)):
                     i+=1
+                    j+=1
                     d_capt = {"image_id": str(idx), "id": str(idx), "caption": c}
                     l_caption.append(d_capt)
                     image.save(im_folder+str(idx)+".jpg")
+        if j>10000:
+            with open(save_folder, 'w', encoding='utf8') as outfile:
+                json.dump(l_caption, outfile, ensure_ascii=False)
+            j = 0
 
         if b == True and i > train_set_size -1:
             real_train_set_size = i
             print("train", i)
-            with open(caption_file_train, 'w', encoding='utf8') as outfile:
+            with open(save_folder, 'w', encoding='utf8') as outfile:
                 json.dump(l_caption, outfile, ensure_ascii=False)
             print(len(l_caption))
             b = False
             l_caption = []
             im_folder = im_folder_val
+            save_folder = caption_file_val
         if i > real_train_set_size + val_set_size -1:
             print("val", i)
-            with open(caption_file_val, 'w', encoding='utf8') as outfile:
+            with open(save_folder, 'w', encoding='utf8') as outfile:
                 json.dump(l_caption, outfile, ensure_ascii=False)
             exit()
     #print(i)
@@ -74,8 +84,8 @@ def generate_image_folder_and_annot_file(target_lang, train_set_size, val_set_si
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--train_size', default = 83000)
-parser.add_argument('--val_size', default = 20000)
+parser.add_argument('--train_size', default = 566852)
+parser.add_argument('--val_size', default = 202700)
 parser.add_argument('--outpath')
 parser.add_argument('--lang')
 
