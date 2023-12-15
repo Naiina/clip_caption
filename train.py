@@ -14,6 +14,8 @@ import json
 from typing import Tuple, Optional, Union
 import numpy as np
 import matplotlib.pyplot as plt
+from accelerate import Accelerator
+
 
 
 
@@ -347,6 +349,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     
     #device = torch.device('cuda:0')
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    accelerator = Accelerator()
     batch_size = args.bs
     epochs = args.epochs
     if not os.path.exists(output_dir):
@@ -359,6 +362,7 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
     scheduler = get_linear_schedule_with_warmup(
         optimizer, num_warmup_steps=warmup_steps, num_training_steps=epochs * len(train_dataloader)
     )
+    model, optimizer, train_dataloader, scheduler = accelerator.prepare( model, optimizer, train_dataloader, scheduler)
     # save_config(args)
     #for epoch in range(1):
     l_mean_loss = []
@@ -383,7 +387,8 @@ def train(nb_epochs, dataset: ClipCocoDataset, model: ClipCaptionModel, args,
             loss = nnf.cross_entropy(logits.reshape(-1, logits.shape[-1]), tokens.flatten(), ignore_index=-100)
             
             #print(loss)
-            loss.backward()
+            accelerator.backward(loss)
+            #loss.backward()
             optimizer.step()
             scheduler.step()
             optimizer.zero_grad()
