@@ -75,9 +75,8 @@ def convert_annot_to_spice_format(annot_file,out_path):
 
 
 
-def compute_score(path,predict_file,metric,dataset,checkpoint):
+def compute_score(path,predict_path,metric,dataset,checkpoint):
     
-    predict_path = path+predict_file
     annot_path = "data/"+dataset+"/annotations/"
     annot_file = annot_path+"val_caption.json"
     
