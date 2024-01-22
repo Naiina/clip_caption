@@ -32,7 +32,7 @@ def keys_mismatch (d1, d2):
     k2 = d2.keys()
     l_1 = [ k in d2 for k in k1]
     l_2 = [k in d1 for k in k2]
-    print(l_1.count(False), l_2.count(False))
+    #print(l_1.count(False), l_2.count(False))
     
 
 def print_some_capt(d1,d2):
@@ -52,10 +52,10 @@ def convert_to_list_for_rouge (path,d_annot, d_pred,checkpoint):
             l_pred_r.append(d_pred[k])
     
     
-    with open (path+"/l_pred_r_val_"+checkpoint+".json", "w",encoding='utf8') as f:
+    with open (path+"/l_pred_r_val_"+str(checkpoint)+".json", "w",encoding='utf8') as f:
         json.dump(l_pred_r,f, ensure_ascii=False)
 
-    with open(path+"/l_annot_r_val_"+checkpoint+".json", 'w',encoding='utf8') as outfile:
+    with open(path+"/l_annot_r_val_"+str(checkpoint)+".json", 'w',encoding='utf8') as outfile:
         json.dump(l_annot_r, outfile, ensure_ascii=False)
     return l_annot_r, l_pred_r
 
@@ -75,7 +75,7 @@ def convert_annot_to_spice_format(annot_file,out_path):
 
 
 
-def compute_score(path,predict_path,metric,dataset,checkpoint):
+def compute_score_rouge(path,predict_path,metric,dataset,checkpoint):
     
     annot_path = "data/"+dataset+"/annotations/"
     annot_file = annot_path+"val_caption.json"
@@ -101,26 +101,30 @@ def compute_score(path,predict_path,metric,dataset,checkpoint):
     if metric == "rouge": 
         rouge = evaluate.load('rouge')
         d_pred, d_annot = convert_to_dict(l_predict, l_annot)
-        #print(d_pred)
+        #for key in d_pred:
+        #    print(key)
+        #    print(d_annot[key])
         l_annot_r, l_pred_r = convert_to_list_for_rouge (path,d_annot, d_pred,checkpoint)
         results = rouge.compute(predictions=l_pred_r, references=l_annot_r)
-        print(results)
-
+        #print(results)
+    return results
+"""
 parser = argparse.ArgumentParser()
 parser.add_argument('--path')
 parser.add_argument('--checkpoint')
 parser.add_argument('--dataset_name')
 parser.add_argument('--metric')
 
+
 args = parser.parse_args()
 
-checkpoint = args.checkpoint
-path = args.path
+checkpoint = checkpoint
+path = path
 predicted_capt = path+"/predicted_captions_val_"+checkpoint+".json"
-metric = args.metric
-dataset_name = args.dataset_name
-
-compute_score(path,predicted_capt,metric,dataset_name,checkpoint)
+metric = metric
+dataset_name = dataset_name
+"""
+#compute_score_rouge(path,predicted_capt,metric,dataset_name,checkpoint)
 
 
 

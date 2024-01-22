@@ -63,7 +63,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32'))
     parser.add_argument('--dataset')
-    parser.add_argument('--train_or_val', choices=('train', 'val'))
+    parser.add_argument('--train_or_val', choices=('train', 'val', 'test'))
     args = parser.parse_args()
     dataset = args.dataset
     train_or_val = args.train_or_val

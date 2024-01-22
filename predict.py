@@ -1,39 +1,29 @@
-# Prediction interface for Cog ⚙️
-# Reference: https://github.com/replicate/cog/blob/main/docs/python.md
-
-import clip
 import os
 import argparse
+import clip
 from torch import nn
 import numpy as np
 import torch
 import torch.nn.functional as nnf
 import sys
 from typing import Tuple, List, Union, Optional
-from train import ClipCaptionModel, ClipCaptionPrefix, MappingType 
-from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
+from clip_models import ClipCaptionModel, ClipCaptionPrefix, MappingType
+#from transformers import GPT2Tokenizer, GPT2LMHeadModel, AdamW, get_linear_schedule_with_warmup
 import skimage.io as io
 import PIL.Image
 import json
 from os import listdir
-from PIL import Image 
+from PIL import Image
 from tqdm import tqdm
 from transformers import AdamW, get_linear_schedule_with_warmup, AutoTokenizer, AutoModel , BloomForCausalLM
 
 torch.manual_seed(0)
 np.random.seed(0)
 
-
-#import cog
-
-# import torch
-
-
-
-
 #D = torch.device
 
 CPU = torch.device("cpu")
+
 
 
 
@@ -178,17 +168,17 @@ def generate2(
     return generated_list[0]
 
 
-def main(use_beam_search = False):
+def main_pred(device,model,dataset_path,model_name,prefix_length,pred_data_size,checkpoint,train_or_val,train_path,use_beam_search = False):
 
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     clip_model, preprocess = clip.load(
         "ViT-B/32", device=device, jit=False
     )
     #tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
     
 
-    
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--prefix_length', type=int, default=10)
     parser.add_argument('--train_or_val', type=str)
@@ -205,27 +195,37 @@ def main(use_beam_search = False):
     parser.add_argument("--checkpoint", default = "latest")
     parser.add_argument("--model_name", default = "bloom")
     parser.add_argument("--dataset")
+    parser.add_argument("--data_size", default = 40000)
     args = parser.parse_args()
     model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
     tokenizer =  AutoTokenizer.from_pretrained(model_name)
     prefix_length = args.prefix_length
     dataset_name = args.dataset
+    data_size = int(args.data_size)
     prefix_dim = 640 if args.is_rn else 512
     args.mapping_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[args.mapping_type]
     #if args.only_prefix:
     #weights_path = "coco_train/coco_prefix_latest.pt"
-    if True:
-        model = ClipCaptionPrefix(prefix_length, model_name = model_name, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
-                                  num_layers=args.num_layers, mapping_type=args.mapping_type)
+    """
+    model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[model_name]
+    tokenizer =  AutoTokenizer.from_pretrained(model_name)
+    #prefix_length = prefix_length
+    
+    pred_data_size = int(pred_data_size)
+    #prefix_dim = 640 if is_rn else 512
+    #mapp_type = {'mlp': MappingType.MLP, 'transformer': MappingType.Transformer}[mapping_type]
+
+    #model = ClipCaptionPrefix(prefix_length, model_name = model_name, clip_length=prefix_length_clip, prefix_size=prefix_dim,
+    #                              num_layers=num_layers, mapping_type=mapping_type)
         
     
-    if args.checkpoint == "latest":
-        weights_path = (args.train_path+"/coco_prefix_"+args.checkpoint+".pt")
-    else :
-        weights_path = (args.train_path+"/coco_prefix-"+args.checkpoint+".pt")
-    model.load_state_dict(torch.load(weights_path, map_location=CPU))
-    model = model.eval()
-    model = model.to(device)
+    #if str(checkpoint) == "latest":
+    #    weights_path = (train_path+"/coco_prefix_"+str(checkpoint)+".pt")
+    #else :
+    #    weights_path = (train_path+"/coco_prefix-00"+str(checkpoint)+".pt")
+    #model.load_state_dict(torch.load(weights_path, map_location=CPU))
+    #model = model.eval()
+    #model = model.to(device)
 
     #create_annotation_val_file()
     
@@ -233,18 +233,17 @@ def main(use_beam_search = False):
     predicted_captions = []
 
     i = 0
-    data_path = "data/"+dataset_name+"/"+args.train_or_val+"/"
+    data_path = "data/"+dataset_path+"/"+train_or_val+"/"
     
     #print(data_path)
     #exit()
     for f in tqdm(listdir(data_path)):
         #d = data[elem]
         i = i+1
-        #if i>10:
-        #    exit()
-        if "wit" in dataset_name:
+        
+        if "wit" in dataset_path:
             img_id = int(f[:-4])
-        if dataset_name == "coco":
+        if dataset_path == "coco":
             img_id = int(f[19:-4])
         #filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
         image = io.imread(data_path+f)
@@ -260,24 +259,33 @@ def main(use_beam_search = False):
         else:
             out = generate2(model, tokenizer, embed=prefix_embed)
         d = {"image_id": img_id, "caption": out}
-        print(d)
+        #print(d)
         predicted_captions.append(d)
+
+
         if i%10000 == 0:
             #with open('filename', 'w', encoding='utf8') as json_file:
             #    json.dump("ברי צקלה", json_file, ensure_ascii=False)
             #json_object = json.dumps(predicted_captions)
 
-            with open(args.train_path+"predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w", encoding = 'utf8') as outfile:
+            with open(train_path+"predicted_captions_"+train_or_val+"_"+str(checkpoint)+".json", "w", encoding = 'utf8') as outfile:
                 json.dump(predicted_captions, outfile, ensure_ascii=False)
-     
+
+        if i>pred_data_size:
+            with open(train_path+"/predicted_captions_"+train_or_val+"_"+str(checkpoint)+".json", "w",encoding="utf8") as outfile:
+                json.dump(predicted_captions,outfile,ensure_ascii=False)
+            break
     #json_object = json.dumps(predicted_captions)
-    with open(args.train_path+"/predicted_captions_"+args.train_or_val+"_"+args.checkpoint+".json", "w",encoding="utf8") as outfile:
+    with open(train_path+"/predicted_captions_"+train_or_val+"_"+str(checkpoint)+".json", "w",encoding="utf8") as outfile:
         json.dump(predicted_captions,outfile,ensure_ascii=False)
     
+    #del model
+    #torch.cuda.empty_cache()
+    
     
 
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
     
-    main()
+#    main()
     
