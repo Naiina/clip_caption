@@ -21,6 +21,8 @@ from accelerate import Accelerator
 import neptune
 from predict import main_pred
 
+#os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "max_split_size_mb:<enter-size-here>"
+
 
 l_lr = [5e-6, 2e-5, 5e-5]
 #l_batch_size = [30, 40, 50]
@@ -121,9 +123,9 @@ def train(run,train_path,train_size,nb_epochs, dataset: clip_models.ClipCocoData
         predicted_capt = train_path+"/predicted_captions_val_"+str(epoch)+".json"
         main_pred(device,model,args.data_folder,args.model_name,args.prefix_length,args.val_size,epoch,
                 "val",train_path,use_beam_search = False)
-        results = compute_score_rouge(train_path,predicted_capt,args.metric,args.data_folder,epoch)
-        print(results)
-        run["rouge_score_epoch "+str(epoch+1)]=results
+        #results = compute_score_rouge(train_path,predicted_capt,args.metric,args.data_folder,epoch)
+        #print(results)
+        #run["rouge_score_epoch "+str(epoch+1)]=results
         #print("predict_end")
         mean_loss_eval = compute_loss(device,CPU,epoch,model,train_path,args.data_folder,args.val_size)
         run["eval_loss"].append( mean_loss_eval )
@@ -175,9 +177,12 @@ def main_all():
     parser.add_argument("--train_size", default = 400000)
     parser.add_argument("--val_size", default = 40000)
     parser.add_argument("--data_folder")
+    parser.add_argument("--flickr", default = False)
+    parser.add_argument("--train_from", default = None)
 
 
     args = parser.parse_args()
+    is_flickr = args.flickr
     model_name = {"bloom" : 'bigscience/bloom-560m', "gpt": "gpt2"}[args.model_name]
     prefix_length = args.prefix_length
     nb_epochs = args.epochs
@@ -187,13 +192,20 @@ def main_all():
     mapp_type = {'mlp': clip_models.MappingType.MLP, 'transformer': clip_models.MappingType.Transformer}[args.mapping_type]
     #checkpoint = args.checkpoint
     train_path = args.train_path
+    
     lr = args.lr
     lr=float(lr)
-
+    if is_flickr:
+        project="naiina/clip-coco-wit-flickr"
+        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzllNjM4MS0zYjBhLTQwNGUtOGM3Mi1hYjE3ZTVjOWVjMTgifQ=="
+        tags=["clip-bloom","coco-en-wit-de-flickr-de"]
+    else:
+        project="naiina/clip-prefix-caption-multilingual"
+        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzllNjM4MS0zYjBhLTQwNGUtOGM3Mi1hYjE3ZTVjOWVjMTgifQ=="
+        tags=["clip-bloom", "wit-en"]
     run = neptune.init_run(
-        project="naiina/clip-prefix-caption-multilingual", 
-        api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiI5YzllNjM4MS0zYjBhLTQwNGUtOGM3Mi1hYjE3ZTVjOWVjMTgifQ==", 
-        tags=["clip-bloom", "wit-en"],  # optional
+        project=project, 
+        api_token=api_token, tags=tags,  # optional
     )
     
     run["torchseed"] = torch_seed
@@ -204,10 +216,15 @@ def main_all():
     run["val_size"] = args.val_size
     run["train_path"] = args.train_path 
 
-
+    
+    
     model = clip_models.ClipCaptionPrefix(prefix_length, model_name, clip_length=args.prefix_length_clip, prefix_size=prefix_dim,
                                   num_layers=args.num_layers, mapping_type=args.mapping_type)
     
+    if is_flickr=="True":
+        weights_path = args.train_from + "/coco_prefix-002.pt"
+        CPU = torch.device("cpu")
+        model.load_state_dict(torch.load(weights_path, map_location=CPU))
     
 
     # Log single value

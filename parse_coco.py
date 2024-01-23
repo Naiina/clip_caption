@@ -13,7 +13,7 @@ import argparse
 def main(clip_model_type: str,dataset, train_or_val = "train"):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     #device = torch.device('cuda:0')
-    clip_model_name = clip_model_type.replace('/', '_')
+    #clip_model_name = clip_model_type.replace('/', '_')
    
     out_path = f"./data/"+dataset+"/oscar_split_"+train_or_val+".pkl"
         
@@ -32,7 +32,7 @@ def main(clip_model_type: str,dataset, train_or_val = "train"):
         img_id = d["image_id"]
         if dataset == "coco":
             filename = f"./data/coco/"+train_or_val+"/COCO_"+train_or_val+"2014_{int(img_id):012d}.jpg"
-        else:
+        else :
             filename = "./data/"+dataset+"/"+train_or_val+"/"+img_id+".jpg"
         
         image = io.imread(filename)
