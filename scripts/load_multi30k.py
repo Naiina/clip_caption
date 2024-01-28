@@ -8,12 +8,12 @@ import argparse
 
 
 
-def main(clip_model_type, dataset, train_or_val = "train"):
-    out_path = f"./data/"+dataset+"/annotations/"+train_or_val+".json"
+def main(dataset, train_or_val, lang):
+    out_path = f"./data/{dataset}/annotations/{train_or_val}_captions_{lang}.json"
         
-    with open('./data/'+dataset+'/annotations/'+train_or_val+'.fr', 'r') as f:
+    with open('./data/'+dataset+'/raw/'+train_or_val+'.'+lang, 'r') as f:
         caps = f.readlines()
-    with open('./data/'+dataset+'/'+train_or_val+'.txt', 'r') as f:
+    with open('./data/'+dataset+'/image_splits/'+train_or_val+'.txt', 'r') as f:
         img = f.readlines()
     data = dict(zip(img, caps))
 
@@ -30,9 +30,7 @@ def main(clip_model_type, dataset, train_or_val = "train"):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--clip_model_type', default="ViT-B/32", choices=('RN50', 'RN101', 'RN50x4', 'ViT-B/32'))
-    parser.add_argument('--dataset')
     parser.add_argument('--train_or_val', choices=('train', 'val'))
+    parser.add_argument('--lang')
     args = parser.parse_args()
-    dataset = args.dataset
-    main(args.clip_model_type, args.dataset, args.train_or_val)
+    main("multi30k", args.train_or_val, args.lang)

@@ -1,0 +1,22 @@
+absl-py==2.1.0
+accelerate==0.26.1
+clip @ git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33
+datasets==2.16.1
+evaluate==0.4.1
+huggingface-hub==0.20.2
+matplotlib==3.8.2
+nltk==3.8.1
+numpy==1.26.3
+pandas==2.1.4
+pycocoevalcap==1.2
+pycocotools==2.0.7
+rouge-score==0.1.2
+scikit-image==0.22.0
+scipy==1.11.4
+tokenizers==0.15.0
+torch==2.1.2
+torchvision==0.16.2
+tqdm==4.66.1
+transformers==4.36.2
+wandb==0.16.2
+snakemake==8.3.1

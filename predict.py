@@ -240,11 +240,13 @@ def main_pred(device,model,dataset_path,model_name,prefix_length,pred_data_size,
     for f in tqdm(listdir(data_path)):
         #d = data[elem]
         i = i+1
-        
         if "wit" in dataset_path:
             img_id = int(f[:-4])
         if dataset_path == "coco":
             img_id = int(f[19:-4])
+        else:
+            img_id = int(f[:-4])
+
         #filename = f"./data/coco/val2014/COCO_val2014_{int(img_id):012d}.jpg"
         image = io.imread(data_path+f)
         pil_image = PIL.Image.fromarray(image)
@@ -289,3 +291,8 @@ def main_pred(device,model,dataset_path,model_name,prefix_length,pred_data_size,
     
 #    main()
     
+<<<<<<< Updated upstream
+=======
+    main()
+    
+>>>>>>> Stashed changes
