@@ -52,3 +52,11 @@ rule embedding:
             lang=["fr"],
             vision=["ViT-B.32"],
         )
+
+#rule coco_annotations:
+#    output:
+#        "data/coco/annotations/"
+
+rule coco_images:
+    output:
+        "data/coco/images/"
